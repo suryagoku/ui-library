@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+:root {
+  color: var(--color-foreground);
+  background: var(--color-background);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-background);
+  color: var(--color-foreground);
+}

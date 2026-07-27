@@ -1,0 +1,11 @@
+{
+  "name": "ui-library",
+  "private": true,
+  "scripts": {},
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.2"
+  }
+}

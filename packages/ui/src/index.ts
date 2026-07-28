@@ -1,3 +1,3 @@
 // Public API
 
-export * from "./lib/cn"
+export * from "./lib/utils"

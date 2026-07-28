@@ -3,7 +3,10 @@
 
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist"
+
+    // tsdown produces dist/ (JS, .d.mts and sourcemaps); tsc is only ever run to typecheck,
+    // so it must not write anything next to the sources.
+    "noEmit": true
   },
 
   "include": ["src"]

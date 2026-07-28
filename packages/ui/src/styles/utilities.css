@@ -1,0 +1,4 @@
+@utility container-edge {
+  margin-inline: auto;
+  width: min(100% - 2rem, 72rem);
+}

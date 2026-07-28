@@ -1,3 +1,3 @@
-// Public API
-
-export * from "./lib/utils"
+export * from "./components/button"
+export * from "./components/dialog"
+export * from "./components/input"

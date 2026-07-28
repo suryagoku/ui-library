@@ -4,18 +4,24 @@
   "private": false,
   "description": "Shared React component library",
   "type": "module",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "files": [
     "dist"
   ],
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "scripts": {
-    "build": "tsdown",
+    "build:js": "tsdown",
+    "build:css": "postcss src/styles/globals.css -o dist/styles.css",
+    "build": "pnpm build:js && pnpm build:css",
     "dev": "tsdown --watch"
   },
   "peerDependencies": {
@@ -30,6 +36,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "postcss": "^8.5.23",
+    "postcss-cli": "^11.0.1",
     "tailwindcss": "^4.3.3"
   }
 }

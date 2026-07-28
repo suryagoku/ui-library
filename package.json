@@ -9,7 +9,13 @@
     "build": "pnpm -r build",
     "dev:docs": "pnpm --filter @my-org/docs dev",
     "dev:storybook": "pnpm --filter @my-org/docs storybook",
-    "build:storybook": "pnpm --filter @my-org/docs build-storybook"
+    "build:storybook": "pnpm --filter @my-org/docs build-storybook",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm run lint && pnpm run format:check && pnpm run typecheck"
   },
   "pnpm": {
     "ignoredBuiltDependencies": [
@@ -17,12 +23,22 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "eslint-plugin-storybook": "^10.5.5",
+    "globals": "^17.8.0",
     "postcss": "^8.5.23",
     "postcss-cli": "^11.0.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.65.0"
   }
 }

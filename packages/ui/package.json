@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "description": "Shared React component library",
+  "license": "UNLICENSED",
   "type": "module",
   "imports": {
     "#components": "./src/components",
@@ -31,7 +32,8 @@
     "build:css": "postcss src/styles/globals.css -o dist/styles.css",
     "build": "pnpm run build:js && pnpm run build:css",
     "typecheck": "tsc -p .",
-    "dev": "tsdown --watch"
+    "dev": "tsdown --watch",
+    "prepack": "pnpm run build"
   },
   "peerDependencies": {
     "react": "^19.0.0",

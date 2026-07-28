@@ -1,0 +1,8 @@
+# Lockfile — Prettier would reformat it and defeat pnpm's own serializer
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+storybook-static/
+
+node_modules/

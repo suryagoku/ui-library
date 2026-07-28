@@ -115,16 +115,16 @@ immediately. You do **not** need to build the library first — see below for wh
 
 Run all of these from the repository root.
 
-| Command | What it does |
-| --- | --- |
-| `pnpm install` | Install/update dependencies for every package |
-| `pnpm dev:docs` | Vite dev server for the demo page (port 5173) |
-| `pnpm dev:storybook` | Storybook dev server (port 6006) |
-| `pnpm build` | Build every package (library, then docs app) |
-| `pnpm build:storybook` | Build static Storybook into `apps/docs/storybook-static` |
-| `pnpm --filter @my-org/ui typecheck` | Typecheck the library only |
-| `pnpm --filter @my-org/ui build` | Build the library only (`dist/`) |
-| `pnpm --filter @my-org/docs preview` | Serve the production docs build locally |
+| Command                              | What it does                                             |
+| ------------------------------------ | -------------------------------------------------------- |
+| `pnpm install`                       | Install/update dependencies for every package            |
+| `pnpm dev:docs`                      | Vite dev server for the demo page (port 5173)            |
+| `pnpm dev:storybook`                 | Storybook dev server (port 6006)                         |
+| `pnpm build`                         | Build every package (library, then docs app)             |
+| `pnpm build:storybook`               | Build static Storybook into `apps/docs/storybook-static` |
+| `pnpm --filter @my-org/ui typecheck` | Typecheck the library only                               |
+| `pnpm --filter @my-org/ui build`     | Build the library only (`dist/`)                         |
+| `pnpm --filter @my-org/docs preview` | Serve the production docs build locally                  |
 
 `--filter` is how pnpm targets one package in a monorepo. `@my-org/ui` and `@my-org/docs`
 are the package names from their `package.json` files.
@@ -137,11 +137,11 @@ In production, `import { Button } from "@my-org/ui"` resolves to the compiled
 So for development, [apps/docs/vite.config.ts](apps/docs/vite.config.ts) aliases the package
 straight to the **source**:
 
-| Import in your code | Resolves to, during dev |
-| --- | --- |
-| `@my-org/ui` | `packages/ui/src/index.ts` |
+| Import in your code     | Resolves to, during dev              |
+| ----------------------- | ------------------------------------ |
+| `@my-org/ui`            | `packages/ui/src/index.ts`           |
 | `@my-org/ui/styles.css` | `packages/ui/src/styles/globals.css` |
-| `@/…` | `apps/docs/src/…` |
+| `@/…`                   | `apps/docs/src/…`                    |
 
 That's why hot reload works across package boundaries. `pnpm build` is only needed to check
 the real published output, or before publishing.
@@ -152,13 +152,15 @@ the real published output, or before publishing.
 
 ```tsx
 import { Button, Input, Dialog, DialogTrigger, DialogContent, DialogTitle } from "@my-org/ui"
-import "@my-org/ui/styles.css"   // once, at your app's entry point
+import "@my-org/ui/styles.css" // once, at your app's entry point
 
 export function Example() {
   return (
     <div className="space-y-4">
       <Button>Save</Button>
-      <Button variant="outline" size="sm">Cancel</Button>
+      <Button variant="outline" size="sm">
+        Cancel
+      </Button>
       <Input type="email" placeholder="you@company.com" />
 
       <Dialog>
@@ -188,7 +190,7 @@ wrapper you pass an element to `render` to swap the underlying tag:
 <DialogTrigger render={<Button variant="outline" />}>Open</DialogTrigger>
 ```
 
-This makes the trigger *be* a `Button` rather than a button inside a button.
+This makes the trigger _be_ a `Button` rather than a button inside a button.
 
 ### Every component accepts `className`
 
@@ -196,7 +198,7 @@ Your classes are merged with the component's own, and yours win on conflicts (th
 `tailwind-merge` in [lib/utils.ts](packages/ui/src/lib/utils.ts)):
 
 ```tsx
-<Button className="w-full">Full width</Button>   // overrides the default width
+<Button className="w-full">Full width</Button> // overrides the default width
 ```
 
 ---
@@ -235,7 +237,7 @@ exact `var()` text in a scanned file. The utility form has no such dependency.
 Add the `dark` class to the `<html>` element and every token flips:
 
 ```html
-<html class="dark">
+<html class="dark"></html>
 ```
 
 The overrides are the `.dark { … }` block in `tokens.css`. Nothing else is wired up — there
@@ -307,7 +309,7 @@ Two helpers live in [lib/utils.ts](packages/ui/src/lib/utils.ts):
 - **`cn(...)`** — merges class strings. Use it for plain HTML elements (`<div>`, `<span>`).
 - **`mergeClassName(base, className)`** — use it when the element is a **Base UI primitive**.
 
-Base UI lets callers pass `className` as a *function* of component state
+Base UI lets callers pass `className` as a _function_ of component state
 (`className={(state) => state.disabled ? "opacity-50" : ""}`). `cn()` cannot handle a
 function — it would silently drop it and produce no class at all. `mergeClassName` resolves
 the function against the state first, so both forms work.
@@ -346,10 +348,10 @@ pnpm --filter @my-org/ui build
 
 Two steps run in sequence, producing `packages/ui/dist/`:
 
-| Step | Tool | Output |
-| --- | --- | --- |
-| `build:js` | tsdown | `index.mjs`, `index.d.mts`, sourcemaps |
-| `build:css` | postcss | `styles.css` (compiled Tailwind) |
+| Step        | Tool    | Output                                 |
+| ----------- | ------- | -------------------------------------- |
+| `build:js`  | tsdown  | `index.mjs`, `index.d.mts`, sourcemaps |
+| `build:css` | postcss | `styles.css` (compiled Tailwind)       |
 
 Nothing is bundled into the output — `react`/`react-dom` are peer dependencies supplied by
 the consuming app, and the runtime dependencies (`@base-ui/react`, `class-variance-authority`,
@@ -371,7 +373,12 @@ pnpm --filter @my-org/ui build
 grep -o 'export {[^}]*}' packages/ui/dist/index.mjs
 ```
 
-A stale `dist/` that silently omits components is an easy mistake to ship.
+A stale `dist/` that silently omits components is an easy mistake to ship. The package now has a
+`prepack` script, so `pnpm pack` and `pnpm publish` always rebuild first.
+
+> **See [PUBLISHING.md](PUBLISHING.md)** for the full guide: how to verify the built package
+> locally (`pnpm pack`, `pnpm link`, or a throwaway local registry) and step-by-step publishing
+> to npm, GitHub Packages, or a private registry.
 
 ---
 

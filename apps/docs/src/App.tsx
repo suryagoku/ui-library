@@ -15,15 +15,13 @@ export function App() {
     <main className="min-h-svh bg-background text-foreground">
       <section className="mx-auto flex min-h-svh max-w-6xl flex-col justify-center gap-10 px-6 py-16">
         <div className="space-y-4">
-          <p className="text-sm uppercase tracking-[0.28em] text-muted-foreground">
-            @my-org/ui
-          </p>
+          <p className="text-sm tracking-[0.28em] text-muted-foreground uppercase">@my-org/ui</p>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
             A reusable React 19 design system with Tailwind CSS v4 and Storybook 10.
           </h1>
           <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-            This docs app consumes the workspace package the same way a downstream
-            application would: through the public exports and shared stylesheet.
+            This docs app consumes the workspace package the same way a downstream application
+            would: through the public exports and shared stylesheet.
           </p>
         </div>
 
@@ -32,8 +30,8 @@ export function App() {
             <div className="mb-6 space-y-2">
               <h2 className="text-2xl font-semibold">Foundation preview</h2>
               <p className="text-sm leading-6 text-muted-foreground">
-                The initial surface ships with Button, Input, and Dialog without
-                wrapper abstractions.
+                The initial surface ships with Button, Input, and Dialog without wrapper
+                abstractions.
               </p>
             </div>
 
@@ -57,9 +55,7 @@ export function App() {
               <Input type="email" placeholder="team@company.com" />
 
               <Dialog>
-                <DialogTrigger render={<Button className="w-full" />}>
-                  Open dialog
-                </DialogTrigger>
+                <DialogTrigger render={<Button className="w-full" />}>Open dialog</DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Library contract looks good</DialogTitle>

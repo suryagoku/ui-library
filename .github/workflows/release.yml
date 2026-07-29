@@ -130,7 +130,7 @@ jobs:
       - name: Create the GitHub Release
         if: ${{ !inputs.dry_run }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh release create "${{ steps.bump.outputs.tag }}" \
             --title "@suryagoku/ui ${{ steps.bump.outputs.version }}" \

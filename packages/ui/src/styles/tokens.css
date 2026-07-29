@@ -5,7 +5,16 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  /* Primary is a blue -> purple gradient. A gradient is a background-image, so it cannot back
+     `text-primary`, `border-primary`, or any `/alpha` modifier — `--primary` stays a flat
+     colour at the midpoint of the ramp so those keep working and match gradient surfaces.
+     `--primary-gradient` is redeclared in `.dark`: var() inside a custom property is
+     substituted where the property is declared, so a `:root` definition would inherit into
+     `.dark` already frozen to the light endpoints. */
+  --primary: oklch(0.55 0.23 285);
+  --primary-from: oklch(0.55 0.22 264);
+  --primary-to: oklch(0.55 0.24 305);
+  --primary-gradient: linear-gradient(to bottom right, var(--primary-from), var(--primary-to));
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -38,6 +47,10 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  /* Exposed as colours so the gradient endpoints also work with Tailwind's own gradient
+     utilities: `bg-linear-to-br from-primary-from to-primary-to`. */
+  --color-primary-from: var(--primary-from);
+  --color-primary-to: var(--primary-to);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -65,8 +78,13 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Lifted, slightly desaturated against the dark background; foreground stays light because
+     the surface is now a saturated colour rather than the near-white it used to be. */
+  --primary: oklch(0.63 0.21 285);
+  --primary-from: oklch(0.63 0.2 264);
+  --primary-to: oklch(0.63 0.22 305);
+  --primary-gradient: linear-gradient(to bottom right, var(--primary-from), var(--primary-to));
+  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);

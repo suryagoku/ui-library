@@ -2,3 +2,22 @@
   margin-inline: auto;
   width: min(100% - 2rem, 72rem);
 }
+
+/* The primary gradient as a paintable surface. `background-color` is kept in sync so that
+   anything sampling the flat colour — a stacked translucent layer, a printed page that drops
+   background images — still lands on the same hue. */
+@utility bg-primary-gradient {
+  background-color: var(--primary);
+  background-image: var(--primary-gradient);
+}
+
+/* Interactive counterpart. Mixing toward `--foreground` rather than a fixed black darkens the
+   ramp in light mode and lightens it in dark, matching how the flat variants shift. */
+@utility bg-primary-gradient-hover {
+  background-color: color-mix(in oklch, var(--primary), var(--foreground) 15%);
+  background-image: linear-gradient(
+    to bottom right,
+    color-mix(in oklch, var(--primary-from), var(--foreground) 15%),
+    color-mix(in oklch, var(--primary-to), var(--foreground) 15%)
+  );
+}

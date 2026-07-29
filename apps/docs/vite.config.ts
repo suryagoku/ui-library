@@ -9,11 +9,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "@my-org/ui/styles.css",
+        find: "@suryagoku/ui/styles.css",
         replacement: path.resolve(__dirname, "../../packages/ui/src/styles/globals.css"),
       },
       {
-        find: "@my-org/ui",
+        find: "@suryagoku/ui",
         replacement: path.resolve(__dirname, "../../packages/ui/src/index.ts"),
       },
       {

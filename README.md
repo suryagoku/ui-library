@@ -28,7 +28,7 @@ This is a **monorepo**: one repo holding several packages that reference each ot
 
 ```
 ui-library/
-├─ packages/ui/              @my-org/ui — the component library (this is what ships)
+├─ packages/ui/              @suryagoku/ui — the component library (this is what ships)
 │  ├─ src/
 │  │  ├─ components/         one file per component: button.tsx, input.tsx, dialog.tsx
 │  │  ├─ lib/utils.ts        cn() + mergeClassName() class-name helpers
@@ -53,7 +53,7 @@ ui-library/
 └─ .nvmrc                    the Node version this repo expects
 ```
 
-`apps/docs` exists so you can see and test your components. It consumes `@my-org/ui`
+`apps/docs` exists so you can see and test your components. It consumes `@suryagoku/ui`
 exactly the way a real downstream app would — through the package's public exports.
 
 ---
@@ -93,7 +93,7 @@ If that errors, your Corepack is too old: `npm i -g corepack@latest`, then try a
 pnpm install
 ```
 
-This installs dependencies for **all** packages at once and links `@my-org/ui` into
+This installs dependencies for **all** packages at once and links `@suryagoku/ui` into
 `apps/docs`. You only need to re-run it when dependencies change.
 
 > You may see `Ignored build scripts: esbuild.` — that is expected and recorded in
@@ -115,33 +115,33 @@ immediately. You do **not** need to build the library first — see below for wh
 
 Run all of these from the repository root.
 
-| Command                              | What it does                                             |
-| ------------------------------------ | -------------------------------------------------------- |
-| `pnpm install`                       | Install/update dependencies for every package            |
-| `pnpm dev:docs`                      | Vite dev server for the demo page (port 5173)            |
-| `pnpm dev:storybook`                 | Storybook dev server (port 6006)                         |
-| `pnpm build`                         | Build every package (library, then docs app)             |
-| `pnpm build:storybook`               | Build static Storybook into `apps/docs/storybook-static` |
-| `pnpm --filter @my-org/ui typecheck` | Typecheck the library only                               |
-| `pnpm --filter @my-org/ui build`     | Build the library only (`dist/`)                         |
-| `pnpm --filter @my-org/docs preview` | Serve the production docs build locally                  |
+| Command                                 | What it does                                             |
+| --------------------------------------- | -------------------------------------------------------- |
+| `pnpm install`                          | Install/update dependencies for every package            |
+| `pnpm dev:docs`                         | Vite dev server for the demo page (port 5173)            |
+| `pnpm dev:storybook`                    | Storybook dev server (port 6006)                         |
+| `pnpm build`                            | Build every package (library, then docs app)             |
+| `pnpm build:storybook`                  | Build static Storybook into `apps/docs/storybook-static` |
+| `pnpm --filter @suryagoku/ui typecheck` | Typecheck the library only                               |
+| `pnpm --filter @suryagoku/ui build`     | Build the library only (`dist/`)                         |
+| `pnpm --filter @my-org/docs preview`    | Serve the production docs build locally                  |
 
-`--filter` is how pnpm targets one package in a monorepo. `@my-org/ui` and `@my-org/docs`
+`--filter` is how pnpm targets one package in a monorepo. `@suryagoku/ui` and `@my-org/docs`
 are the package names from their `package.json` files.
 
 ### Why you don't need to build the library during development
 
-In production, `import { Button } from "@my-org/ui"` resolves to the compiled
+In production, `import { Button } from "@suryagoku/ui"` resolves to the compiled
 `packages/ui/dist/index.mjs`. That would mean rebuilding after every edit.
 
 So for development, [apps/docs/vite.config.ts](apps/docs/vite.config.ts) aliases the package
 straight to the **source**:
 
-| Import in your code     | Resolves to, during dev              |
-| ----------------------- | ------------------------------------ |
-| `@my-org/ui`            | `packages/ui/src/index.ts`           |
-| `@my-org/ui/styles.css` | `packages/ui/src/styles/globals.css` |
-| `@/…`                   | `apps/docs/src/…`                    |
+| Import in your code        | Resolves to, during dev              |
+| -------------------------- | ------------------------------------ |
+| `@suryagoku/ui`            | `packages/ui/src/index.ts`           |
+| `@suryagoku/ui/styles.css` | `packages/ui/src/styles/globals.css` |
+| `@/…`                      | `apps/docs/src/…`                    |
 
 That's why hot reload works across package boundaries. `pnpm build` is only needed to check
 the real published output, or before publishing.
@@ -151,8 +151,8 @@ the real published output, or before publishing.
 ## Using the components
 
 ```tsx
-import { Button, Input, Dialog, DialogTrigger, DialogContent, DialogTitle } from "@my-org/ui"
-import "@my-org/ui/styles.css" // once, at your app's entry point
+import { Button, Input, Dialog, DialogTrigger, DialogContent, DialogTitle } from "@suryagoku/ui"
+import "@suryagoku/ui/styles.css" // once, at your app's entry point
 
 export function Example() {
   return (
@@ -259,7 +259,7 @@ pnpm exec shadcn add badge
 Then complete the two things the CLI does not do:
 
 1. **Export it** from [packages/ui/src/index.ts](packages/ui/src/index.ts) — until you do,
-   `import { Badge } from "@my-org/ui"` will not resolve:
+   `import { Badge } from "@suryagoku/ui"` will not resolve:
 
    ```ts
    export * from "./components/badge"
@@ -268,7 +268,7 @@ Then complete the two things the CLI does not do:
 2. **Typecheck it**, since generated code occasionally needs a small adjustment:
 
    ```bash
-   pnpm --filter @my-org/ui typecheck
+   pnpm --filter @suryagoku/ui typecheck
    ```
 
 ### Option B — by hand
@@ -325,7 +325,7 @@ Stories are the Storybook entries for a component. Put them in
 
 ```tsx
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { Badge } from "@my-org/ui"
+import { Badge } from "@suryagoku/ui"
 
 const meta = { title: "Components/Badge", component: Badge } satisfies Meta<typeof Badge>
 export default meta
@@ -343,7 +343,7 @@ Each exported `Story` becomes one entry in the sidebar under `title`.
 ## Building and publishing the library
 
 ```bash
-pnpm --filter @my-org/ui build
+pnpm --filter @suryagoku/ui build
 ```
 
 Two steps run in sequence, producing `packages/ui/dist/`:
@@ -361,15 +361,15 @@ the package. That keeps `index.mjs` around 8 kB.
 Consumers get exactly two entry points, declared in `packages/ui/package.json`:
 
 ```
-@my-org/ui              → dist/index.mjs
-@my-org/ui/styles.css   → dist/styles.css
+@suryagoku/ui              → dist/index.mjs
+@suryagoku/ui/styles.css   → dist/styles.css
 ```
 
 **Before publishing**, bump `version` in `packages/ui/package.json`, run a clean build, and
 sanity-check that everything you expect is exported:
 
 ```bash
-pnpm --filter @my-org/ui build
+pnpm --filter @suryagoku/ui build
 grep -o 'export {[^}]*}' packages/ui/dist/index.mjs
 ```
 
@@ -425,5 +425,5 @@ The file must match `*.stories.tsx` and live under `apps/docs/src/`.
 ## Not set up yet
 
 So you don't go looking for these: there is no linter, no formatter config, and no test
-runner in this repo. `pnpm --filter @my-org/ui typecheck` and the Storybook a11y addon are
+runner in this repo. `pnpm --filter @suryagoku/ui typecheck` and the Storybook a11y addon are
 the only automated checks today.

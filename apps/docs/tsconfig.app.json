@@ -8,11 +8,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@my-org/ui": ["../../packages/ui/src/index.ts"],
-      "@my-org/ui/components": ["../../packages/ui/src/components"],
-      "@my-org/ui/components/*": ["../../packages/ui/src/components/*"],
-      "@my-org/ui/lib": ["../../packages/ui/src/lib"],
-      "@my-org/ui/lib/*": ["../../packages/ui/src/lib/*"]
+      "@suryagoku/ui": ["../../packages/ui/src/index.ts"],
+      "@suryagoku/ui/components": ["../../packages/ui/src/components"],
+      "@suryagoku/ui/components/*": ["../../packages/ui/src/components/*"],
+      "@suryagoku/ui/lib": ["../../packages/ui/src/lib"],
+      "@suryagoku/ui/lib/*": ["../../packages/ui/src/lib/*"]
     }
   },
   "include": ["src"]

@@ -1,7 +1,7 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 
-import "@my-org/ui/styles.css"
+import "@suryagoku/ui/styles.css"
 
 import { App } from "./App"
 

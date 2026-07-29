@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { ArrowRightIcon, MailIcon, PlusIcon, TrashIcon } from "lucide-react"
 
-import { Button } from "@my-org/ui"
+import { Button } from "@suryagoku/ui"
 
 const VARIANTS = ["default", "outline", "secondary", "ghost", "destructive", "link"] as const
 const SIZES = ["xs", "sm", "default", "lg"] as const

@@ -12,9 +12,9 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
-    "ui": "@my-org/ui/components",
+    "ui": "@suryagoku/ui/components",
     "hooks": "@/hooks",
     "lib": "@/lib",
-    "utils": "@my-org/ui/lib/utils"
+    "utils": "@suryagoku/ui/lib/utils"
   }
 }

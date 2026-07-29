@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useState } from "react"
 
-import { Input } from "@my-org/ui"
+import { Input } from "@suryagoku/ui"
 
 const meta = {
   title: "Components/Input",

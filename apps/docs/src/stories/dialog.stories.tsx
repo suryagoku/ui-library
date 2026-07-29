@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
-} from "@my-org/ui"
+} from "@suryagoku/ui"
 
 const meta = {
   title: "Components/Dialog",

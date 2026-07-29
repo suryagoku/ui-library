@@ -8,14 +8,14 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
-} from "@my-org/ui"
+} from "@suryagoku/ui"
 
 export function App() {
   return (
     <main className="min-h-svh bg-background text-foreground">
       <section className="mx-auto flex min-h-svh max-w-6xl flex-col justify-center gap-10 px-6 py-16">
         <div className="space-y-4">
-          <p className="text-sm tracking-[0.28em] text-muted-foreground uppercase">@my-org/ui</p>
+          <p className="text-sm tracking-[0.28em] text-muted-foreground uppercase">@suryagoku/ui</p>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
             A reusable React 19 design system with Tailwind CSS v4 and Storybook 10.
           </h1>
@@ -62,7 +62,7 @@ export function App() {
                     <DialogDescription>
                       The docs app is importing components and styles through
                       <code className="mx-1 rounded bg-muted px-1.5 py-0.5 text-xs">
-                        @my-org/ui
+                        @suryagoku/ui
                       </code>
                       without deep relative imports.
                     </DialogDescription>

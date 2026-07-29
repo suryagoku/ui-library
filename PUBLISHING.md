@@ -1,4 +1,4 @@
-# Verifying and publishing `@my-org/ui`
+# Verifying and publishing `@suryagoku/ui`
 
 How to check the built package locally before you ship it, and how to publish it.
 
@@ -26,10 +26,10 @@ Only `dist/` ships. That is set by two fields in
 `files` controls what goes into the tarball; `exports` controls what consumers are allowed to
 import. Together they give consumers exactly two entry points:
 
-| Consumer writes                       | Gets                                             |
-| ------------------------------------- | ------------------------------------------------ |
-| `import { Button } from "@my-org/ui"` | `dist/index.mjs` (types from `dist/index.d.mts`) |
-| `import "@my-org/ui/styles.css"`      | `dist/styles.css`                                |
+| Consumer writes                          | Gets                                             |
+| ---------------------------------------- | ------------------------------------------------ |
+| `import { Button } from "@suryagoku/ui"` | `dist/index.mjs` (types from `dist/index.d.mts`) |
+| `import "@suryagoku/ui/styles.css"`      | `dist/styles.css`                                |
 
 Anything not listed in `exports` is unreachable, even though it exists in the tarball. That is
 deliberate — it keeps `src/` internals from becoming accidental API.
@@ -41,7 +41,7 @@ deliberate — it keeps `src/` internals from becoming accidental API.
 cd packages/ui && npm pack --dry-run
 
 # Or build a real tarball and look inside it
-pnpm --filter @my-org/ui pack --pack-destination /tmp
+pnpm --filter @suryagoku/ui pack --pack-destination /tmp
 tar -tzf /tmp/my-org-ui-0.1.0.tgz
 ```
 
@@ -74,7 +74,7 @@ Still worth checking by hand before a release:
 
 # 2. Clean build from scratch
 rm -rf packages/ui/dist
-pnpm --filter @my-org/ui build
+pnpm --filter @suryagoku/ui build
 
 # 3. Confirm the export surface is complete (expect 13 names today)
 grep -o 'export {[^}]*}' packages/ui/dist/index.mjs
@@ -96,19 +96,19 @@ question.
 
 ### A. Through the docs app — fastest
 
-The docs app normally aliases `@my-org/ui` to **source** for hot reload, so it does not exercise
+The docs app normally aliases `@suryagoku/ui` to **source** for hot reload, so it does not exercise
 the build at all. To test the built output instead, temporarily point the alias at `dist` in
 [apps/docs/vite.config.ts](apps/docs/vite.config.ts):
 
 ```diff
  {
-   find: "@my-org/ui",
+   find: "@suryagoku/ui",
 -  replacement: path.resolve(__dirname, "../../packages/ui/src/index.ts"),
 +  replacement: path.resolve(__dirname, "../../packages/ui/dist/index.mjs"),
  },
 ```
 
-Then `pnpm --filter @my-org/ui build && pnpm dev:docs`. Good for catching "it works in source but
+Then `pnpm --filter @suryagoku/ui build && pnpm dev:docs`. Good for catching "it works in source but
 the bundle is broken". **Revert the alias afterwards** or you lose hot reload.
 
 ### B. Pack and install the tarball — recommended
@@ -118,7 +118,7 @@ This is byte-for-byte what npm would serve, so it catches missing `files` entrie
 
 ```bash
 # 1. Build a tarball (prepack rebuilds dist for you)
-pnpm --filter @my-org/ui pack --pack-destination /tmp
+pnpm --filter @suryagoku/ui pack --pack-destination /tmp
 
 # 2. In a scratch project somewhere outside this repo
 mkdir /tmp/consumer && cd /tmp/consumer
@@ -126,7 +126,7 @@ npm init -y && npm pkg set type=module
 npm install /tmp/my-org-ui-0.1.0.tgz react@^19 react-dom@^19
 
 # 3. Prove the contract holds
-node --input-type=module -e "import * as UI from '@my-org/ui'; console.log(Object.keys(UI))"
+node --input-type=module -e "import * as UI from '@suryagoku/ui'; console.log(Object.keys(UI))"
 ```
 
 That should print all 13 exports. To check the stylesheet subpath and the types too:
@@ -134,12 +134,12 @@ That should print all 13 exports. To check the stylesheet subpath and the types 
 ```bash
 node --input-type=module -e "
   import { createRequire } from 'node:module'
-  console.log(createRequire(import.meta.url).resolve('@my-org/ui/styles.css'))"
+  console.log(createRequire(import.meta.url).resolve('@suryagoku/ui/styles.css'))"
 ```
 
 For a real UI smoke test, scaffold a Vite React app instead
 (`npm create vite@latest consumer -- --template react-ts`), install the tarball there, import
-`@my-org/ui/styles.css` in `main.tsx`, and render a `<Button>`. Remember the consumer needs its
+`@suryagoku/ui/styles.css` in `main.tsx`, and render a `<Button>`. Remember the consumer needs its
 own Tailwind setup only if _it_ uses Tailwind classes — the library's own styles arrive
 pre-compiled in `styles.css`.
 
@@ -159,14 +159,14 @@ the package, so edits show up without repacking.
 ```bash
 # Option 1 — via the global store
 cd packages/ui && pnpm link          # register this package globally
-cd /path/to/your-app && pnpm link @my-org/ui
+cd /path/to/your-app && pnpm link @suryagoku/ui
 
 # Option 2 — link a directory directly, no global step
 cd /path/to/your-app
 pnpm link ../ui-library/packages/ui
 ```
 
-Undo with `pnpm unlink @my-org/ui` in the consumer.
+Undo with `pnpm unlink @suryagoku/ui` in the consumer.
 
 Three caveats, in order of how likely they are to bite:
 
@@ -209,12 +209,12 @@ pnpm dlx verdaccio@6 --listen 4873
 npm adduser --registry http://localhost:4873
 
 # 3. Publish to it — --no-git-checks because pnpm otherwise refuses a dirty tree
-pnpm --filter @my-org/ui publish \
+pnpm --filter @suryagoku/ui publish \
   --registry http://localhost:4873 --no-git-checks
 
 # 4. Install from it, exactly like a consumer would
 mkdir /tmp/consumer && cd /tmp/consumer && npm init -y
-npm install @my-org/ui --registry http://localhost:4873
+npm install @suryagoku/ui --registry http://localhost:4873
 ```
 
 Browse <http://localhost:4873> to see the published package and its README. Stop Verdaccio and
@@ -227,7 +227,7 @@ It is worth rehearsing a republish here too, because **pnpm and npm behave diffe
 version already exists:
 
 ```bash
-pnpm --filter @my-org/ui publish --no-git-checks --registry http://localhost:4873
+pnpm --filter @suryagoku/ui publish --no-git-checks --registry http://localhost:4873
 # → "There are no new packages that should be published"   exit code 0
 
 npm publish --registry http://localhost:4873
@@ -244,7 +244,7 @@ assert the version actually changed rather than trusting the exit code.
 
 ### 0. Choosing a name and scope
 
-`@my-org/ui` will fail against any real registry, because scopes are owned. Pick the scope you
+`@suryagoku/ui` will fail against any real registry, because scopes are owned. Pick the scope you
 actually control and rename it in **both** places:
 
 ```bash
@@ -261,7 +261,7 @@ actually control and rename it in **both** places:
 
 Then update the aliases in [apps/docs/vite.config.ts](apps/docs/vite.config.ts), the `paths` in
 `apps/docs/tsconfig*.json`, and the imports in `src/` and `src/stories/`. A single
-find-and-replace of `@my-org/ui` across the repo covers all of it. Finish with `pnpm install`
+find-and-replace of `@suryagoku/ui` across the repo covers all of it. Finish with `pnpm install`
 so the workspace link is rewritten, then `pnpm check`.
 
 While you're there, fill in the two fields npm expects and this package still lacks a real value
@@ -279,7 +279,7 @@ has **no git remote configured yet**; add it once it does.
 ### 1. Rehearse
 
 ```bash
-pnpm --filter @my-org/ui publish --dry-run --no-git-checks
+pnpm --filter @suryagoku/ui publish --dry-run --no-git-checks
 ```
 
 Does everything except the upload. Always do this first.
@@ -289,7 +289,7 @@ Does everything except the upload. Always do this first.
 Run it through pnpm from the workspace root so filtering works:
 
 ```bash
-pnpm --filter @my-org/ui publish
+pnpm --filter @suryagoku/ui publish
 ```
 
 Two things to know about `pnpm publish` specifically:
@@ -304,7 +304,7 @@ Now pick your registry.
 
 ```bash
 npm login                                   # once per machine
-pnpm --filter @my-org/ui publish --access public
+pnpm --filter @suryagoku/ui publish --access public
 ```
 
 **Scoped packages default to `restricted`**, which fails with `402 Payment Required` on a free
@@ -334,7 +334,7 @@ Pin the registry in the package so nobody publishes to the wrong place by accide
 
 ```bash
 export GITHUB_TOKEN=ghp_...
-pnpm --filter @my-org/ui publish
+pnpm --filter @suryagoku/ui publish
 ```
 
 Requires a `repository` field pointing at the same org, and a git remote. Consumers also need
@@ -349,7 +349,7 @@ _read_ private packages.
 
 ```bash
 npm config set //npm.internal.example.com/:_authToken "$NPM_TOKEN"
-pnpm --filter @my-org/ui publish
+pnpm --filter @suryagoku/ui publish
 ```
 
 Commit a repo-level `.npmrc` with the registry line (but **not** the token) so everyone resolves
@@ -388,7 +388,7 @@ slightly wrong is low while you stabilise.
 ```bash
 # Bump, build, tag
 cd packages/ui && npm version patch          # or minor / major
-cd ../.. && git commit -am "release: @my-org/ui $(node -p "require('./packages/ui/package.json').version")"
+cd ../.. && git commit -am "release: @suryagoku/ui $(node -p "require('./packages/ui/package.json').version")"
 git tag "ui-v$(node -p "require('./packages/ui/package.json').version")"
 ```
 

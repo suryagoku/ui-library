@@ -78,11 +78,14 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  /* Lifted, slightly desaturated against the dark background; foreground stays light because
-     the surface is now a saturated colour rather than the near-white it used to be. */
-  --primary: oklch(0.63 0.21 285);
-  --primary-from: oklch(0.63 0.2 264);
-  --primary-to: oklch(0.63 0.22 305);
+  /* Deeper and a little calmer than the light ramp: the foreground here is near-white, and white
+     text gains contrast as the surface darkens, so lifting lightness to separate from the
+     background trades away button legibility. L 0.6 keeps both, and the trimmed chroma stops the
+     ramp vibrating against the L 0.145 background. Foreground stays light because the surface is
+     a saturated colour now, not the near-white it used to be. */
+  --primary: oklch(0.6 0.2 285);
+  --primary-from: oklch(0.6 0.19 264);
+  --primary-to: oklch(0.6 0.21 305);
   --primary-gradient: linear-gradient(to bottom right, var(--primary-from), var(--primary-to));
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);

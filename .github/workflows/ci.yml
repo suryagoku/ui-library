@@ -1,0 +1,68 @@
+name: CI
+
+# Every pull request and every push to the default branch runs the same commands a developer
+# runs locally (pnpm check), plus the two things only CI can guarantee: that the tarball we
+# would publish is well-formed, and that Storybook still builds.
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+# A new push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, format, typecheck, build, package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pnpm version from package.json's "packageManager" field, so CI and developers
+      # cannot drift apart. Must run before setup-node, which needs pnpm present to cache its store.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # .nvmrc is the single source of truth for the Node version, shared with developers.
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # --frozen-lockfile fails if pnpm-lock.yaml is out of sync with any package.json, so a
+      # dependency change without a lockfile update is caught here rather than at release time.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      # Typechecks every workspace package (tsc only — tsdown does the emitting).
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      # Builds both packages: the library's dist/ and the docs app's production bundle.
+      - name: Build
+        run: pnpm run build
+
+      # Asserts the publishing contract on a freshly packed tarball: only dist/ ships, all entry
+      # points exist, no exported name was silently dropped, dependencies stayed external, and
+      # the stylesheet was really compiled by Tailwind.
+      - name: Verify publishable package
+        run: pnpm run verify:pkg
+
+      - name: Build Storybook
+        run: pnpm run build:storybook
+
+      # Lets a reviewer download and open the built Storybook straight from the PR.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storybook-static
+          path: apps/docs/storybook-static
+          retention-days: 7

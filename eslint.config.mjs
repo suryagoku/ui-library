@@ -41,9 +41,9 @@ export default tseslint.config(
     },
   },
 
-  // Build/tooling config files run in Node, not the browser.
+  // Build/tooling config files and repository scripts run in Node, not the browser.
   {
-    files: ["**/*.config.{ts,mts,mjs}", "apps/docs/.storybook/*.ts"],
+    files: ["**/*.config.{ts,mts,mjs}", "apps/docs/.storybook/*.ts", "scripts/**/*.mjs"],
     languageOptions: {
       globals: globals.node,
     },

@@ -1,0 +1,137 @@
+name: Release @suryagoku/ui
+
+# Manual, deliberate releases. Versioning is semver judged from the consumer's point of view:
+#
+#   new component / new optional prop / new variant          -> minor
+#   bug fix or style tweak that does not change the API      -> patch
+#   removed or renamed export, prop or variant               -> major
+#   renamed a design token (consumers override them by name) -> major
+#   changed a peer dependency range (e.g. React 19 -> 20)    -> major
+#
+# See PUBLISHING.md for the whole flow, including how to publish by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Semver bump"
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+      dry_run:
+        description: "Rehearse only — verify and pack, publish nothing, push nothing"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write # push the release commit and tag, create the GitHub Release
+
+concurrency:
+  group: release-suryagoku-ui
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify, publish, tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release notes are generated from history
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          # Writes the auth line for this registry into a temporary .npmrc, fed by NODE_AUTH_TOKEN.
+          registry-url: https://registry.npmjs.org
+
+      - name: Refuse to release from a non-default branch
+        run: |
+          if [ "${{ github.ref_name }}" != "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::Releases must run on ${{ github.event.repository.default_branch }}, got ${{ github.ref_name }}."
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      # The same gates as CI. A release must never be the first place these run.
+      - run: pnpm run lint
+      - run: pnpm run format:check
+      - run: pnpm run typecheck
+      - run: pnpm run verify:pkg
+
+      - name: Bump version
+        id: bump
+        working-directory: packages/ui
+        run: |
+          npm version "${{ inputs.release_type }}" --no-git-tag-version
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=ui-v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing @suryagoku/ui@$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      # Registries never allow overwriting a published version. This check matters more here
+      # than it would with npm: `pnpm publish` prints "There are no new packages that should be
+      # published" and exits 0 when the version already exists, so a release job can otherwise
+      # go green having published nothing at all.
+      - name: Refuse to republish an existing version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view "@suryagoku/ui@${{ steps.bump.outputs.version }}" version >/dev/null 2>&1; then
+            echo "::error::@suryagoku/ui@${{ steps.bump.outputs.version }} is already published. Choose a different bump."
+            exit 1
+          fi
+          echo "Version is free."
+
+      # --no-git-checks is required, not optional: the version bump above leaves the tree dirty,
+      # and pnpm publish refuses to run from a dirty tree. The branch guard and the version
+      # checks around this step are what that refusal was protecting against.
+      - name: Publish (dry run)
+        if: inputs.dry_run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter @suryagoku/ui publish --dry-run --no-git-checks --access public
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # prepack rebuilds dist/ from current source, so a stale build cannot be published.
+        run: pnpm --filter @suryagoku/ui publish --no-git-checks --access public
+
+      # Because pnpm publish can exit 0 without uploading anything, the only trustworthy signal
+      # is the registry itself.
+      - name: Confirm the registry serves the new version
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PUBLISHED="$(npm view "@suryagoku/ui@${{ steps.bump.outputs.version }}" version)"
+          if [ "$PUBLISHED" != "${{ steps.bump.outputs.version }}" ]; then
+            echo "::error::Registry reports '$PUBLISHED', expected '${{ steps.bump.outputs.version }}'."
+            exit 1
+          fi
+
+      - name: Commit and tag the release
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release: @suryagoku/ui ${{ steps.bump.outputs.version }}"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:"${{ github.ref_name }}"
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      - name: Create the GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            --title "@suryagoku/ui ${{ steps.bump.outputs.version }}" \
+            --generate-notes

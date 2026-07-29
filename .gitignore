@@ -5,6 +5,9 @@ node_modules/
 dist/
 storybook-static/
 
+# npm pack output — tarballs are build artefacts, never sources
+*.tgz
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

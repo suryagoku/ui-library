@@ -9,7 +9,15 @@ Shared React component library and design system for internal web applications.
 - Reusable React components
 - Shared design tokens
 - Storybook documentation
-- Private npm package for internal applications
+- Published as a versioned npm package, released from CI
+
+The registry is a deliberate choice, not a default: the release workflow targets the **public
+npm registry** today, because it is the only option that works before this repository has a git
+remote (GitHub Packages requires the scope to match the repository owner). If this package
+should stay internal, switch registries — it is a one-line change, documented in
+[PUBLISHING.md](PUBLISHING.md#option-2--github-packages). Either way, settle the `license`
+field before the first publish: it currently says `UNLICENSED`, which contradicts a public
+release.
 
 ## Tech Stack
 
@@ -48,6 +56,8 @@ ui-library/
 │  ├─ .storybook/            Storybook config
 │  └─ vite.config.ts         dev server + workspace aliases + Tailwind plugin
 │
+├─ .github/workflows/        CI, the release workflow, and the Storybook deploy
+├─ scripts/verify-package.mjs  asserts the publishable tarball is well-formed
 ├─ tsconfig.base.json        TypeScript options shared by every package
 ├─ pnpm-workspace.yaml       tells pnpm that apps/* and packages/* are workspace packages
 └─ .nvmrc                    the Node version this repo expects
@@ -115,16 +125,20 @@ immediately. You do **not** need to build the library first — see below for wh
 
 Run all of these from the repository root.
 
-| Command                                 | What it does                                             |
-| --------------------------------------- | -------------------------------------------------------- |
-| `pnpm install`                          | Install/update dependencies for every package            |
-| `pnpm dev:docs`                         | Vite dev server for the demo page (port 5173)            |
-| `pnpm dev:storybook`                    | Storybook dev server (port 6006)                         |
-| `pnpm build`                            | Build every package (library, then docs app)             |
-| `pnpm build:storybook`                  | Build static Storybook into `apps/docs/storybook-static` |
-| `pnpm --filter @suryagoku/ui typecheck` | Typecheck the library only                               |
-| `pnpm --filter @suryagoku/ui build`     | Build the library only (`dist/`)                         |
-| `pnpm --filter @my-org/docs preview`    | Serve the production docs build locally                  |
+| Command                                 | What it does                                                    |
+| --------------------------------------- | --------------------------------------------------------------- |
+| `pnpm install`                          | Install/update dependencies for every package                   |
+| `pnpm dev:docs`                         | Vite dev server for the demo page (port 5173)                   |
+| `pnpm dev:storybook`                    | Storybook dev server (port 6006)                                |
+| `pnpm build`                            | Build every package (library, then docs app)                    |
+| `pnpm build:storybook`                  | Build static Storybook into `apps/docs/storybook-static`        |
+| `pnpm --filter @suryagoku/ui typecheck` | Typecheck the library only                                      |
+| `pnpm --filter @suryagoku/ui build`     | Build the library only (`dist/`)                                |
+| `pnpm --filter @my-org/docs preview`    | Serve the production docs build locally                         |
+| `pnpm lint` / `pnpm lint:fix`           | ESLint                                                          |
+| `pnpm format` / `pnpm format:check`     | Prettier                                                        |
+| `pnpm verify:pkg`                       | Assert the publishable tarball is well-formed                   |
+| `pnpm check`                            | lint + format + typecheck + package checks — run before pushing |
 
 `--filter` is how pnpm targets one package in a monorepo. `@suryagoku/ui` and `@my-org/docs`
 are the package names from their `package.json` files.
@@ -374,11 +388,48 @@ grep -o 'export {[^}]*}' packages/ui/dist/index.mjs
 ```
 
 A stale `dist/` that silently omits components is an easy mistake to ship. The package now has a
-`prepack` script, so `pnpm pack` and `pnpm publish` always rebuild first.
+`prepack` script, so `pnpm pack` and `pnpm publish` always rebuild first, and one command checks
+the result:
+
+```bash
+pnpm verify:pkg
+```
+
+That packs the tarball without publishing it and asserts 25 things — only `dist/` ships, every
+entry point exists, **every name a barrel module exports actually reached `dist/index.mjs`**,
+dependencies stayed external instead of being inlined, the stylesheet was really compiled by
+Tailwind, and `apps/docs` is still marked private. CI runs it on every push, and the release
+workflow runs it again before publishing.
 
 > **See [PUBLISHING.md](PUBLISHING.md)** for the full guide: how to verify the built package
 > locally (`pnpm pack`, `pnpm link`, or a throwaway local registry) and step-by-step publishing
 > to npm, GitHub Packages, or a private registry.
+
+---
+
+## Continuous integration and releases
+
+Three workflows in [.github/workflows](.github/workflows):
+
+| Workflow               | Trigger                                | What it does                                                                                                         |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`               | every PR, pushes to the default branch | lint, format check, typecheck, build both packages, `verify:pkg`, build Storybook and upload it as an artifact       |
+| `release.yml`          | manual (Actions → Run workflow)        | bump, re-run every gate, publish, confirm the registry, then commit, tag `ui-v<version>` and create a GitHub Release |
+| `deploy-storybook.yml` | pushes touching the library or docs    | deploy Storybook to GitHub Pages                                                                                     |
+
+CI runs exactly what `pnpm check` runs locally, so a green local run means a green pipeline.
+
+To release: **Actions → Release @suryagoku/ui → Run workflow**, choose `patch`, `minor` or
+`major`, and tick **dry_run** first if you want a rehearsal that publishes and pushes nothing.
+
+Before the first release you must (see
+[PUBLISHING.md](PUBLISHING.md#before-the-first-release)):
+
+1. create the GitHub repository and add it as `origin` — this repo has no remote yet
+2. add the `repository` field to `packages/ui/package.json`
+3. add an `NPM_TOKEN` repository secret (an npm **automation** token)
+4. decide the `license` and registry, since `UNLICENSED` and a public release conflict
+5. enable Pages (Settings → Pages → Source: GitHub Actions) if you want the docs site
 
 ---
 
@@ -424,6 +475,12 @@ The file must match `*.stories.tsx` and live under `apps/docs/src/`.
 
 ## Not set up yet
 
-So you don't go looking for these: there is no linter, no formatter config, and no test
-runner in this repo. `pnpm --filter @suryagoku/ui typecheck` and the Storybook a11y addon are
-the only automated checks today.
+So you don't go looking for it: **there is no test runner.** The automated checks today are
+ESLint, Prettier, `tsc` across both packages, the package verification in
+[scripts/verify-package.mjs](scripts/verify-package.mjs), and the Storybook a11y addon — all of
+them wired into `pnpm check` and CI. Adding component tests (Vitest with the Storybook addon,
+running stories in a real browser) is the obvious next step.
+
+There is also **no git remote**, so the workflows in `.github/` cannot run until this repository
+has one. And with more than one published package here, manual `npm version` bumping should give
+way to [Changesets](https://github.com/changesets/changesets).

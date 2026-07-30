@@ -17,7 +17,9 @@ on:
   workflow_run:
     workflows: ["Release @suryagoku/ui"]
     types: [completed]
-    branches: [main]
+    # No `branches` filter here: that filter matches the PR's *head* branch (e.g. feat/my-thing),
+    # never `main`, so it would silently suppress every trigger. release.yml is already
+    # restricted to PRs that target main, so workflow_run only fires in that case anyway.
   workflow_dispatch:
     inputs:
       ref:
@@ -49,9 +51,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Empty means "the triggering ref". The release workflow passes the default branch, so
-          # the deploy reflects the tip after the release commit rather than the merge ref.
-          ref: ${{ inputs.ref }}
+          # For workflow_run: inputs.ref is empty, so fall back to the default branch (main).
+          # This ensures the build reflects the tip of main, which by the time workflow_run
+          # fires already includes the release commit pushed by release.yml.
+          # For workflow_dispatch: use the caller-supplied ref, or default branch if blank.
+          ref: ${{ inputs.ref || github.event.repository.default_branch }}
 
       - uses: pnpm/action-setup@v4
 

@@ -38,7 +38,7 @@ This is a **monorepo**: one repo holding several packages that reference each ot
 ui-library/
 ├─ packages/ui/              @suryagoku/ui — the component library (this is what ships)
 │  ├─ src/
-│  │  ├─ components/         one file per component: button.tsx, input.tsx, dialog.tsx
+│  │  ├─ components/         one file per component: badge.tsx, button.tsx, input.tsx, dialog.tsx
 │  │  ├─ lib/utils.ts        cn() + mergeClassName() class-name helpers
 │  │  ├─ styles/
 │  │  │  ├─ globals.css      the stylesheet entry — imports everything below
@@ -190,6 +190,9 @@ export function Example() {
   )
 }
 ```
+
+**Badge** — `variant`: `default` `secondary` `destructive` `outline` `ghost` `link`. Renders a
+`<span>`; pass `render={<a href="…" />}` for a link badge, which is what the hover styles apply to.
 
 **Button** — `variant`: `default` `outline` `secondary` `ghost` `destructive` `link`.
 `size`: `default` `xs` `sm` `lg` `icon` `icon-xs` `icon-sm` `icon-lg`.

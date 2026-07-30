@@ -231,4 +231,3 @@ jobs:
           gh release create "${{ steps.bump.outputs.tag }}" \
             --title "@suryagoku/ui ${{ steps.bump.outputs.version }}" \
             --generate-notes
-

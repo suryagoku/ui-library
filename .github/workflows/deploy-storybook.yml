@@ -5,15 +5,25 @@ name: Deploy Storybook
 #
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 # Until that is set, this workflow fails at the deploy step with "Pages is not enabled".
+#
+# Called by release.yml after every merge rather than triggered by the push itself: a releasing
+# merge produces two pushes (the merge, then the release commit), and triggering on both would
+# deploy the same Storybook twice. workflow_dispatch covers the rare direct push to the branch.
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - "packages/ui/**"
-      - "apps/docs/**"
-      - "package.json"
-      - ".github/workflows/deploy-storybook.yml"
+  workflow_call:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to build. Defaults to the ref that triggered the run."
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to build. Defaults to the ref that triggered the run."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -33,6 +43,10 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Empty means "the triggering ref". The release workflow passes the default branch, so
+          # the deploy reflects the tip after the release commit rather than the merge ref.
+          ref: ${{ inputs.ref }}
 
       - uses: pnpm/action-setup@v4
 

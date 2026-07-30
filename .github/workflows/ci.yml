@@ -57,6 +57,11 @@ jobs:
       - name: Verify publishable package
         run: pnpm run verify:pkg
 
+      # The parser that decides published version numbers. Its own tests run here as well as in
+      # `pnpm check`, because a wrong answer from it is silent.
+      - name: Verify the PR title parser
+        run: pnpm run verify:title
+
       - name: Build Storybook
         run: pnpm run build:storybook
 

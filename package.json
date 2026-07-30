@@ -15,8 +15,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "check": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run verify:pkg",
-    "verify:pkg": "node scripts/verify-package.mjs"
+    "check": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run verify:pkg && pnpm run verify:title",
+    "verify:pkg": "node scripts/verify-package.mjs",
+    "verify:title": "node scripts/pr-title.mjs --selftest",
+    "bump-for": "node scripts/pr-title.mjs --bump"
   },
   "pnpm": {
     "ignoredBuiltDependencies": [

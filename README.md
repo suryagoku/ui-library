@@ -11,13 +11,13 @@ Shared React component library and design system for internal web applications.
 - Storybook documentation
 - Published as a versioned npm package, released from CI
 
-The registry is a deliberate choice, not a default: the release workflow targets the **public
-npm registry** today, because it is the only option that works before this repository has a git
-remote (GitHub Packages requires the scope to match the repository owner). If this package
-should stay internal, switch registries — it is a one-line change, documented in
-[PUBLISHING.md](PUBLISHING.md#option-2--github-packages). Either way, settle the `license`
-field before the first publish: it currently says `UNLICENSED`, which contradicts a public
-release.
+Releases are automatic: **merging a pull request publishes it**, with the version derived from the
+pull request title — see [Continuous integration and releases](#continuous-integration-and-releases).
+
+The registry is a deliberate choice, not a default: the release workflow targets the **public npm
+registry**. If this package should stay internal, switch registries — it is a one-line change,
+documented in [PUBLISHING.md](PUBLISHING.md#option-2--github-packages). Either way, settle the
+`license` field: it currently says `UNLICENSED`, which contradicts a public release.
 
 ## Tech Stack
 
@@ -56,8 +56,9 @@ ui-library/
 │  ├─ .storybook/            Storybook config
 │  └─ vite.config.ts         dev server + workspace aliases + Tailwind plugin
 │
-├─ .github/workflows/        CI, the release workflow, and the Storybook deploy
+├─ .github/workflows/        CI, the PR title check, the release, the Storybook deploy
 ├─ scripts/verify-package.mjs  asserts the publishable tarball is well-formed
+├─ scripts/pr-title.mjs      parses PR titles and derives the version bump from them
 ├─ tsconfig.base.json        TypeScript options shared by every package
 ├─ pnpm-workspace.yaml       tells pnpm that apps/* and packages/* are workspace packages
 └─ .nvmrc                    the Node version this repo expects
@@ -138,6 +139,8 @@ Run all of these from the repository root.
 | `pnpm lint` / `pnpm lint:fix`           | ESLint                                                          |
 | `pnpm format` / `pnpm format:check`     | Prettier                                                        |
 | `pnpm verify:pkg`                       | Assert the publishable tarball is well-formed                   |
+| `pnpm verify:title`                     | Test the PR-title parser that decides version bumps             |
+| `pnpm bump-for "<pr title>"`            | Print the release a PR title would cause                        |
 | `pnpm check`                            | lint + format + typecheck + package checks — run before pushing |
 
 `--filter` is how pnpm targets one package in a monorepo. `@suryagoku/ui` and `@my-org/docs`
@@ -409,27 +412,74 @@ workflow runs it again before publishing.
 
 ## Continuous integration and releases
 
-Three workflows in [.github/workflows](.github/workflows):
+**Merging a pull request is the release.** There is no version to choose and no workflow to run
+by hand: the bump is derived from the pull request title, so the version consumers install is
+decided by the same sentence that describes the change.
 
-| Workflow               | Trigger                                | What it does                                                                                                         |
-| ---------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`               | every PR, pushes to the default branch | lint, format check, typecheck, build both packages, `verify:pkg`, build Storybook and upload it as an artifact       |
-| `release.yml`          | manual (Actions → Run workflow)        | bump, re-run every gate, publish, confirm the registry, then commit, tag `ui-v<version>` and create a GitHub Release |
-| `deploy-storybook.yml` | pushes touching the library or docs    | deploy Storybook to GitHub Pages                                                                                     |
+### The pull request title is the release input
+
+Titles follow [Conventional Commits](https://www.conventionalcommits.org/), and the **PR title**
+check fails the pull request if they don't:
+
+| Title                                   | On merge                                         |
+| --------------------------------------- | ------------------------------------------------ |
+| `feat: add a Tooltip component`         | **minor** — new component, prop or variant       |
+| `fix: restore focus on close`           | **patch**                                        |
+| `perf: memoise the class-name merge`    | **patch**                                        |
+| `feat!: require React 20`               | **minor** while `0.x`, **major** from `1.0.0` on |
+| `docs:` `chore:` `ci:` `test:` `style:` | nothing is published                             |
+| `refactor:` `revert:` `build:`          | nothing is published                             |
+
+A scope is optional: `fix(dialog): restore focus on close`. Check what a title will do before you
+push:
+
+```bash
+pnpm bump-for "feat(button): add a loading state"   # -> minor
+```
+
+Non-releasing types are deliberate — a README fix should not ship a new version whose `dist/` is
+byte-identical to the last one. The Storybook site still redeploys on those merges.
+
+The rule lives in one place, [scripts/pr-title.mjs](scripts/pr-title.mjs), which both the check
+and the release read. It has its own test table (`pnpm verify:title`, part of `pnpm check`),
+because a parser that quietly picks the wrong version number is the worst kind of bug here.
+
+### The workflows
+
+Four workflows in [.github/workflows](.github/workflows):
+
+| Workflow               | Trigger                                 | What it does                                                                                                        |
+| ---------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `pr-title.yml`         | PR opened, edited, pushed to            | rejects a title that isn't conventional, with a message saying how to fix it                                        |
+| `ci.yml`               | every PR, pushes to the default branch  | lint, format check, typecheck, build both packages, `verify:pkg`, `verify:title`, build Storybook as an artifact    |
+| `release.yml`          | **a PR merged into `main`** (or manual) | derive the bump; if releasing: gates → publish → confirm the registry → commit, tag `ui-v<version>`, GitHub Release |
+| `deploy-storybook.yml` | called by `release.yml` after any merge | deploy Storybook to GitHub Pages                                                                                    |
 
 CI runs exactly what `pnpm check` runs locally, so a green local run means a green pipeline.
 
-To release: **Actions → Release @suryagoku/ui → Run workflow**, choose `patch`, `minor` or
-`major`, and tick **dry_run** first if you want a rehearsal that publishes and pushes nothing.
+`release.yml` triggers on a closed pull request and never on a push, so the release commit it
+pushes to `main` cannot re-trigger it.
 
-Before the first release you must (see
-[PUBLISHING.md](PUBLISHING.md#before-the-first-release)):
+### Releasing by hand
 
-1. create the GitHub repository and add it as `origin` — this repo has no remote yet
-2. add the `repository` field to `packages/ui/package.json`
-3. add an `NPM_TOKEN` repository secret (an npm **automation** token)
-4. decide the `license` and registry, since `UNLICENSED` and a public release conflict
-5. enable Pages (Settings → Pages → Source: GitHub Actions) if you want the docs site
+Still possible, for the cases the automatic path doesn't cover: **Actions → Release @suryagoku/ui
+→ Run workflow**. Pick `patch`/`minor`/`major`, or `current` to publish the version already in
+`package.json` without bumping. Tick **dry_run** for a rehearsal that publishes and pushes nothing.
+
+### Repository settings this depends on
+
+The automation is inert without these — see
+[PUBLISHING.md](PUBLISHING.md#repository-settings-the-automation-depends-on):
+
+1. **Squash merging**, with the default commit message set to _"Pull request title and
+   description"_ — otherwise the enforced title never reaches the history on `main`
+2. **`PR title` as a required status check** on `main` — until then the check is only advisory and
+   a non-conventional title can still merge
+3. branch protection must let the release job push the version commit (a `GH_TOKEN` PAT, which
+   this repo already uses, or a bypass entry for `github-actions[bot]`)
+4. an `NPM_TOKEN` repository secret (an npm **automation** token)
+5. Pages enabled (Settings → Pages → Source: GitHub Actions)
+6. settle `license` — it still says `UNLICENSED`, which contradicts a public npm release
 
 ---
 
@@ -477,10 +527,13 @@ The file must match `*.stories.tsx` and live under `apps/docs/src/`.
 
 So you don't go looking for it: **there is no test runner.** The automated checks today are
 ESLint, Prettier, `tsc` across both packages, the package verification in
-[scripts/verify-package.mjs](scripts/verify-package.mjs), and the Storybook a11y addon — all of
-them wired into `pnpm check` and CI. Adding component tests (Vitest with the Storybook addon,
-running stories in a real browser) is the obvious next step.
+[scripts/verify-package.mjs](scripts/verify-package.mjs), the title-parser tests in
+[scripts/pr-title.mjs](scripts/pr-title.mjs), and the Storybook a11y addon — all of them wired
+into `pnpm check` and CI. Adding component tests (Vitest with the Storybook addon, running stories
+in a real browser) is the obvious next step.
 
-There is also **no git remote**, so the workflows in `.github/` cannot run until this repository
-has one. And with more than one published package here, manual `npm version` bumping should give
-way to [Changesets](https://github.com/changesets/changesets).
+Versioning is **single-package**: the bump derived from a pull request title is applied to
+`@suryagoku/ui` and nothing else. As soon as a second publishable package lives here, that breaks
+down — one title cannot describe two packages — and this should give way to
+[Changesets](https://github.com/changesets/changesets), which versions each package from its own
+changelog entries.

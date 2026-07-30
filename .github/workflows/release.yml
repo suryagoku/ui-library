@@ -1,44 +1,110 @@
 name: Release @suryagoku/ui
 
-# Manual, deliberate releases. Versioning is semver judged from the consumer's point of view:
+# Merging a pull request into the default branch is the release. The bump is derived from the
+# merged pull request's title by scripts/pr-title.mjs, the same script the "PR title" check runs:
 #
-#   new component / new optional prop / new variant          -> minor
-#   bug fix or style tweak that does not change the API      -> patch
-#   removed or renamed export, prop or variant               -> major
-#   renamed a design token (consumers override them by name) -> major
-#   changed a peer dependency range (e.g. React 19 -> 20)    -> major
+#   feat: …                                              -> minor
+#   fix: … / perf: …                                     -> patch
+#   any type with "!" (feat!: …)                         -> minor while 0.x, major from 1.0.0 on
+#   build/chore/ci/docs/refactor/revert/style/test: …    -> nothing is published
 #
-# See PUBLISHING.md for the whole flow, including how to publish by hand.
+# Storybook is redeployed on every merge, whether or not a version was published.
+#
+# This workflow triggers on a closed pull request, never on a push, so the release commit it
+# pushes to the default branch cannot re-trigger it. See PUBLISHING.md for the whole flow.
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  # Escape hatch: publish by hand when the automatic path is not what you want — the first
+  # release, or recovering after a failed run.
   workflow_dispatch:
     inputs:
       release_type:
-        description: "Semver bump"
+        description: "Semver bump — 'current' publishes package.json's version without bumping"
         required: true
         default: patch
         type: choice
-        options: [patch, minor, major]
+        options: [patch, minor, major, current]
       dry_run:
         description: "Rehearse only — verify and pack, publish nothing, push nothing"
         required: false
         default: false
         type: boolean
 
-permissions:
-  contents: write # push the release commit and tag, create the GitHub Release
-
 concurrency:
   group: release-suryagoku-ui
   cancel-in-progress: false
 
 jobs:
+  # Decides what (if anything) to release, so the expensive job below only starts when there is
+  # something to do, and the run page explains itself either way.
+  plan:
+    name: Decide the release
+    # `merged` is what separates a real merge from a pull request that was closed unmerged.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      bump: ${{ steps.decide.outputs.bump }}
+      release: ${{ steps.decide.outputs.release }}
+      branch: ${{ steps.decide.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Derive the bump
+        id: decide
+        env:
+          # Same rule as the PR title check: the title reaches the script as data, not as shell.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          EVENT: ${{ github.event_name }}
+          INPUT_BUMP: ${{ inputs.release_type }}
+          # For a pull_request event github.ref is the merge ref, not the branch that was merged into.
+          BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            BUMP="$INPUT_BUMP"
+            echo "Manual release requested: $BUMP" >> "$GITHUB_STEP_SUMMARY"
+          else
+            BUMP="$(node scripts/pr-title.mjs --bump "$PR_TITLE")"
+            echo "Merged: \`$PR_TITLE\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "$BUMP" = "none" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "No release: that type does not change what consumers install. Storybook is still deployed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Release: **$BUMP**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
   release:
     name: Verify, publish, tag
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the release commit and tag, create the GitHub Release
     steps:
       - uses: actions/checkout@v4
         with:
+          # On a pull_request event the default ref is the merge ref, so the branch has to be
+          # named explicitly or the release commit lands on a detached ref and is lost.
+          ref: ${{ needs.plan.outputs.branch }}
           fetch-depth: 0 # release notes are generated from history
+          # A PAT, so the release commit can be pushed even when the default branch is protected.
+          # (GitHub reserves the GITHUB_ prefix for secret names, hence GH_TOKEN.)
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v4
 
@@ -49,10 +115,11 @@ jobs:
           # Writes the auth line for this registry into a temporary .npmrc, fed by NODE_AUTH_TOKEN.
           registry-url: https://registry.npmjs.org
 
+      # The trigger's `branches: [main]` covers the merge path; this covers a manual dispatch.
       - name: Refuse to release from a non-default branch
         run: |
-          if [ "${{ github.ref_name }}" != "${{ github.event.repository.default_branch }}" ]; then
-            echo "::error::Releases must run on ${{ github.event.repository.default_branch }}, got ${{ github.ref_name }}."
+          if [ "${{ needs.plan.outputs.branch }}" != "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::Releases must run on ${{ github.event.repository.default_branch }}, got ${{ needs.plan.outputs.branch }}."
             exit 1
           fi
 
@@ -63,12 +130,20 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run typecheck
       - run: pnpm run verify:pkg
+      - run: pnpm run verify:title
 
       - name: Bump version
         id: bump
         working-directory: packages/ui
+        env:
+          BUMP: ${{ needs.plan.outputs.bump }}
         run: |
-          npm version "${{ inputs.release_type }}" --no-git-tag-version
+          set -euo pipefail
+          # 'current' publishes what is already in package.json — how 0.1.0 itself gets released,
+          # since every bump would otherwise skip straight past it.
+          if [ "$BUMP" != "current" ]; then
+            npm version "$BUMP" --no-git-tag-version
+          fi
           VERSION="$(node -p "require('./package.json').version")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=ui-v$VERSION" >> "$GITHUB_OUTPUT"
@@ -117,21 +192,44 @@ jobs:
             exit 1
           fi
 
+      # Publishing comes first, so a rejected upload never leaves behind a tag for a version that
+      # does not exist. 'current' has nothing to commit, only a tag to move.
       - name: Commit and tag the release
         if: ${{ !inputs.dry_run }}
+        env:
+          BUMP: ${{ needs.plan.outputs.bump }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "release: @suryagoku/ui ${{ steps.bump.outputs.version }}"
+          if [ "$BUMP" != "current" ]; then
+            # [skip ci] because the only change is a version number that CI just verified.
+            git commit -am "release: @suryagoku/ui ${{ steps.bump.outputs.version }} [skip ci]"
+          fi
           git tag "${{ steps.bump.outputs.tag }}"
-          git push origin HEAD:"${{ github.ref_name }}"
+          git push origin HEAD:"${{ needs.plan.outputs.branch }}"
           git push origin "${{ steps.bump.outputs.tag }}"
 
       - name: Create the GitHub Release
         if: ${{ !inputs.dry_run }}
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.bump.outputs.tag }}" \
             --title "@suryagoku/ui ${{ steps.bump.outputs.version }}" \
             --generate-notes
+
+  # Runs on every merge, releasing or not: a docs-only pull request still changes the Storybook.
+  # Skipped only if the release failed, so Pages never advertises a version that never published.
+  storybook:
+    name: Deploy Storybook
+    needs: [plan, release]
+    if: ${{ !cancelled() && needs.release.result != 'failure' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Deploys the tip of the branch, which by now includes the release commit.
+    uses: ./.github/workflows/deploy-storybook.yml
+    with:
+      ref: ${{ needs.plan.outputs.branch }}

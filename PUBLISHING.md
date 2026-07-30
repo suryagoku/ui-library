@@ -5,11 +5,15 @@ How to check the built package locally before you ship it, and how to publish it
 Every command here is run from the repository root unless stated otherwise, and every step
 assumes `nvm use` (Node 22+) — see [README.md](README.md#1-prerequisites).
 
-> **Before your first publish:** you cannot publish to a scope you do not own. `@suryagoku` must
-> be a scope you control on the target registry — see
-> [Choosing a name and scope](#0-choosing-a-name-and-scope) — and this repository has no git
-> remote yet, so the release workflow cannot run. See
-> [Before the first release](#before-the-first-release).
+> **Publishing is automatic:** merging a pull request into `main` derives the version from the
+> pull request title and publishes it — see
+> [The normal path](#the-normal-path--merge-a-pull-request). The rest of this document is for
+> checking a build before it ships, and for the cases where you need to publish by hand.
+>
+> Two things must be true first: `@suryagoku` is a scope you control on the target registry (see
+> [Choosing a name and scope](#0-choosing-a-name-and-scope)), and the repository settings in
+> [Repository settings the automation depends on](#repository-settings-the-automation-depends-on)
+> are in place.
 
 ---
 
@@ -256,56 +260,106 @@ assert the version actually changed rather than trusting the exit code.
 
 ## Publishing
 
-### The normal path — the release workflow
+### The normal path — merge a pull request
 
-Actions → **Release @suryagoku/ui** → Run workflow → pick `patch` / `minor` / `major`. Tick
-**dry_run** first if you want a rehearsal that publishes and pushes nothing.
+You do not run anything. **Merging a pull request into `main` is the release**, and the version
+comes from the pull request title:
 
-[.github/workflows/release.yml](.github/workflows/release.yml) then:
+| Title                                | Result on merge                                  |
+| ------------------------------------ | ------------------------------------------------ |
+| `feat: …`                            | **minor**                                        |
+| `fix: …` / `perf: …`                 | **patch**                                        |
+| any type with `!` (`feat!: …`)       | **minor** while `0.x`, **major** from `1.0.0` on |
+| everything else (`docs`, `chore`, …) | nothing is published; Storybook still deploys    |
 
-1. refuses to run outside the default branch
-2. `pnpm install --frozen-lockfile`, then lint, format check, typecheck and `verify:pkg` — a
-   release is never the first place these run
-3. bumps `version` in `packages/ui/package.json` (the lockfile records the workspace dependency
-   as `link:../../packages/ui`, with no version, so it needs no update)
-4. **refuses to continue if that version is already published**
-5. `pnpm --filter @suryagoku/ui publish --no-git-checks --access public`, with `prepack`
-   rebuilding `dist/`
-6. **re-queries the registry to confirm the new version is really served**
-7. commits `release: @suryagoku/ui <version>`, tags `ui-v<version>`, pushes, and creates a
-   GitHub Release with generated notes
+The full list lives in [scripts/pr-title.mjs](scripts/pr-title.mjs), which is also what the **PR
+title** check runs on every pull request — so the rule that gates the title and the rule that
+picks the version are the same code and cannot disagree. Ask it directly:
 
-Steps 4 and 6 are not belt-and-braces here — they are load-bearing. As
+```bash
+pnpm bump-for "feat(button): add a loading state"   # -> minor
+```
+
+A breaking change while the package is below `1.0.0` bumps the **minor**, not the major: a single
+`!` in a title should not be able to declare this library stable at `1.0.0` by accident. From
+`1.0.0` on, `!` means major.
+
+[.github/workflows/release.yml](.github/workflows/release.yml) then, in three jobs:
+
+1. **plan** — derives the bump from the merged title and writes it to the run summary. On a
+   non-releasing type it says so and stops there.
+2. **release** (only if something is to be published) — checks out `main` (on a `pull_request`
+   event the default ref is the merge ref, not the branch), `pnpm install --frozen-lockfile`, then
+   lint, format check, typecheck, `verify:pkg` and `verify:title` — a release is never the first
+   place these run. Then it bumps `version` in `packages/ui/package.json` (the lockfile records
+   the workspace dependency as `link:../../packages/ui`, with no version, so it needs no update),
+   **refuses to continue if that version is already published**, publishes with `prepack`
+   rebuilding `dist/`, **re-queries the registry to confirm the new version is really served**,
+   and only then commits `release: @suryagoku/ui <version> [skip ci]`, tags `ui-v<version>`,
+   pushes, and creates a GitHub Release with generated notes.
+3. **storybook** — deploys Pages from the tip of `main`, so it includes the release commit. This
+   runs on **every** merge, releasing or not, and is skipped only if the release failed.
+
+The two registry checks are not belt-and-braces — they are load-bearing. As
 [documented below](#3-verify-the-published-result), `pnpm publish` prints "There are no new
-packages that should be published" and **exits 0** when the version already exists. Without
-those two checks a release job could go green having published nothing.
+packages that should be published" and **exits 0** when the version already exists. Without them a
+release job could go green having published nothing.
 
-`--no-git-checks` is required rather than optional: the version bump in step 3 leaves the tree
-dirty, and `pnpm publish` refuses to run from a dirty tree. The branch guard in step 1 and the
-version checks in steps 4 and 6 are what that refusal was protecting against.
+`--no-git-checks` is required rather than optional: the version bump leaves the tree dirty, and
+`pnpm publish` refuses to run from a dirty tree. The branch guard and the version checks around it
+are what that refusal was protecting against.
 
 Publishing happens **before** the push on purpose: if the registry rejects the upload, no commit
 or tag is left claiming a version that does not exist.
 
-### Before the first release
+The workflow triggers on a **closed pull request**, never on a push, so the release commit it
+pushes to `main` cannot re-trigger it. There is no loop to guard against.
 
-The workflow cannot work until these are done. None of them are optional.
+### Releasing by hand
 
-1. **Create the GitHub repository and add the remote.** This repo has no `origin`, so nothing in
-   `.github/` can run: `git remote add origin git@github.com:<owner>/ui-library.git`.
-2. **Own the scope.** `@suryagoku` must be a scope you control on the target registry — see
+Actions → **Release @suryagoku/ui** → Run workflow, for the cases merging doesn't cover:
+
+- `patch` / `minor` / `major` — an explicit bump
+- `current` — publish the version already in `packages/ui/package.json` **without** bumping. This
+  is how a version that main already records but the registry never received gets published.
+- **dry_run** — rehearse: verify and pack, publish nothing, push nothing
+
+### Repository settings the automation depends on
+
+Without these the workflows run but the automation does not hold. None of them are optional.
+
+1. **Enable squash merging, with the title as the commit subject.** Settings → General → Pull
+   Requests → _Allow squash merging_, default commit message _"Pull request title and
+   description"_. Enforcing a title only shapes the history on `main` if the squash subject comes
+   from it; with a merge commit instead, the title never reaches `main` at all and the version bump
+   corresponds to no commit anyone can read.
+2. **Make `PR title` a required status check.** Settings → Branches → branch protection for `main`.
+   Until it is required, the check is advisory and a non-conventional title can still merge — as
+   can a direct push to `main`, which never opens a pull request and so never gets checked.
+3. **Let the release job push the version commit.** Protected branches reject the push otherwise,
+   and you get a package on the registry that `main` has no record of. Either keep the `GH_TOKEN`
+   PAT this repo already uses, or add `github-actions[bot]` to the protection bypass list.
+4. **Add the `NPM_TOKEN` secret** (Settings → Secrets and variables → Actions). Create it on
+   npmjs.com as an **automation** token, so it works without a 2FA prompt in CI.
+5. **Own the scope.** `@suryagoku` must be a scope you control on the target registry — see
    [Choosing a name and scope](#0-choosing-a-name-and-scope).
-3. **Add the `NPM_TOKEN` secret** (Settings → Secrets and variables → Actions). Create it on
-   npmjs.com as an **automation** token, so it works without a 2FA prompt in CI. This is the
-   only secret the release workflow needs; the GitHub Release step uses the built-in
-   `GITHUB_TOKEN`.
-4. **Settle the `license` field.** It is `UNLICENSED`, which contradicts publishing publicly.
-   Either change it to `MIT` (or similar) before a public release, or switch to a private
-   registry — see [Option 2](#option-2--github-packages) and
+6. **Settle the `license` field.** It is `UNLICENSED`, which contradicts publishing publicly.
+   Either change it to `MIT` (or similar), or switch to a private registry — see
+   [Option 2](#option-2--github-packages) and
    [Option 3](#option-3--private-registry-verdaccio-artifactory-nexus).
-5. **Add the `repository` field** to `packages/ui/package.json` once the remote exists. Required
-   by GitHub Packages, and it gives the npm page a source link.
-6. **Enable Pages** if you want the docs site: Settings → Pages → Source: "GitHub Actions".
+7. **Add the `repository` field** to `packages/ui/package.json`. Required by GitHub Packages, and
+   it gives the npm page a source link.
+8. **Enable Pages** if you want the docs site: Settings → Pages → Source: "GitHub Actions".
+
+On tokens: `secrets.GITHUB_TOKEN` is injected automatically and never needs creating — GitHub
+reserves the `GITHUB_` prefix, so you cannot make a secret by that name. A separate PAT (here
+`GH_TOKEN`) is still worth having, because the built-in token cannot push past branch protection.
+The workflow falls back to the built-in token where the PAT is absent.
+
+Note that a pull request **from a fork** gets a read-only `GITHUB_TOKEN`, so the release job cannot
+push. That is fine for an internal library where pull requests come from branches in this
+repository; if fork contributions start arriving, the release trigger has to move to `push` on
+`main` and recover the title from the squash commit subject.
 
 ### Why the public npm registry is the default
 
@@ -357,8 +411,8 @@ for:
 `license` is `UNLICENSED`, which is appropriate for an internal package but **contradicts a
 public npm release** — change it to `MIT` or similar before publishing publicly, or switch to
 [Option 2](#option-2--github-packages) or [Option 3](#option-3--private-registry-verdaccio-artifactory-nexus).
-`repository` is absent because this repo has **no git remote configured yet**; add it once it
-does. GitHub Packages requires it.
+`repository` is still absent from the manifest even though the remote exists — add it. GitHub
+Packages requires it, and it gives the npm page a source link.
 
 ### 1. Rehearse
 
@@ -373,8 +427,9 @@ Does everything except the upload. Always do this first.
 
 ### 2. Publish by hand
 
-Only needed when the workflow cannot run — no remote yet, or a release from a machine with
-credentials the CI job does not have. Otherwise use the workflow, which also tags and verifies.
+Only needed when the workflow cannot run at all — for example a release from a machine holding
+credentials the CI job does not have. Otherwise merge a pull request, or dispatch the workflow
+manually; both also tag the release and verify the registry actually served it.
 
 Run it through pnpm from the workspace root so filtering works:
 
@@ -485,21 +540,26 @@ Then install it in a scratch project, as in method B — against the real regist
 
 ## Versioning
 
-Semver, judged from the consumer's point of view:
+Semver, judged from the consumer's point of view — and since the bump is derived from the pull
+request title, this table is really a guide to **titling** the pull request:
 
-| Change                                               | Bump                                         |
-| ---------------------------------------------------- | -------------------------------------------- |
-| New component, new optional prop, new variant        | **minor** (`0.1.0` → `0.2.0`)                |
-| Bug fix, style tweak that doesn't change the API     | **patch** (`0.1.0` → `0.1.1`)                |
-| Removed or renamed export, prop, or variant name     | **major**                                    |
-| Renamed a design token in `tokens.css`               | **major** — consumers override these by name |
-| Changed a peer dependency range (e.g. React 19 → 20) | **major**                                    |
+| Change                                               | Title it                 | Bump                                         |
+| ---------------------------------------------------- | ------------------------ | -------------------------------------------- |
+| New component, new optional prop, new variant        | `feat: …`                | **minor** (`0.2.1` → `0.3.0`)                |
+| Bug fix, style tweak that doesn't change the API     | `fix: …`                 | **patch** (`0.2.1` → `0.2.2`)                |
+| A performance change with no API change              | `perf: …`                | **patch**                                    |
+| Removed or renamed export, prop, or variant name     | `feat!: …` / `fix!: …`   | **major** — but see the `0.x` rule below     |
+| Renamed a design token in `tokens.css`               | `feat!: …`               | **major** — consumers override these by name |
+| Changed a peer dependency range (e.g. React 19 → 20) | `feat!: …`               | **major**                                    |
+| Docs, CI, refactors, dependency bumps, tests         | `docs:` `ci:` `chore:` … | nothing published                            |
 
-Below `1.0.0`, npm treats a minor bump as potentially breaking anyway, so the cost of getting it
-slightly wrong is low while you stabilise.
+Below `1.0.0` the `!` rule bends: a breaking change bumps the **minor**, not the major, so one `!`
+cannot promote the library to a stable `1.0.0` by accident. npm treats a `0.x` minor bump as
+potentially breaking anyway, so the cost of getting it slightly wrong is low while you stabilise.
+When you are ready to declare the API stable, release `1.0.0` with a manual dispatch; from then on
+`!` means major.
 
-The release workflow does the bump, the commit and the tag for you — you only choose which of
-the three it is. By hand, the same steps are:
+The release workflow does the bump, the commit and the tag. By hand, the same steps are:
 
 ```bash
 # Bump, build, tag
@@ -512,9 +572,11 @@ git tag "ui-v$(node -p "require('./packages/ui/package.json').version")"
 `ui-v<version>` convention stays the only tag — it names the package as well as the version,
 which matters as soon as a second package is published from this repo.
 
-Once more than one package here is published, switch to
-[Changesets](https://github.com/changesets/changesets) — it handles cross-package version bumps
-and generates changelogs, which manual bumping does not.
+This scheme is **single-package** by design: one pull request title yields one version, applied to
+`@suryagoku/ui`. Once a second publishable package lives here that breaks down, because one title
+cannot describe two packages independently — switch to
+[Changesets](https://github.com/changesets/changesets), which versions each package from its own
+changelog entries.
 
 ---
 
@@ -540,6 +602,26 @@ succeed while publishing nothing.
 **`ERR_PNPM_GIT_UNCLEAN`**
 `pnpm publish` found uncommitted changes. Commit them, or pass `--no-git-checks`. The release
 workflow passes it deliberately, because its own version bump dirties the tree.
+
+**The `PR title` check fails**
+The message names the problem and the allowed types. Rename the pull request (the check re-runs on
+`edited`); no new commit is needed. Preview any title with `pnpm bump-for "<title>"`.
+
+**A pull request merged but nothing was published**
+Expected, if the title's type does not release — `docs:`, `chore:`, `ci:`, `test:`, `style:`,
+`refactor:`, `revert:`, `build:`. The release run's summary says so explicitly. To publish anyway,
+dispatch the workflow by hand.
+
+**The release job fails at "Commit and tag the release" with `protected branch hook declined`**
+Branch protection is rejecting the version commit. Give the job a `GH_TOKEN` PAT with push rights,
+or add `github-actions[bot]` to the bypass list. The package is already published at this point —
+re-running will now fail on "Refuse to republish", so finish it by pushing the version commit and
+the `ui-v<version>` tag by hand.
+
+**`main`'s version is ahead of the registry**
+A bump was committed but the publish never landed (or the version was edited by hand). Dispatch the
+workflow with `release_type: current` to publish the version `main` already records, rather than
+bumping past it.
 
 **The release workflow says "Releases must run on main"**
 `workflow_dispatch` was started from another branch. Release from the default branch.

@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -30,16 +31,25 @@ export function App() {
             <div className="mb-6 space-y-2">
               <h2 className="text-2xl font-semibold">Foundation preview</h2>
               <p className="text-sm leading-6 text-muted-foreground">
-                The initial surface ships with Button, Input, and Dialog without wrapper
+                The initial surface ships with Badge, Button, Input, and Dialog without wrapper
                 abstractions.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button>Primary action</Button>
-              <Button variant="secondary">Secondary</Button>
-              <Button variant="outline">Outline</Button>
-              <Button variant="ghost">Ghost</Button>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3">
+                <Button>Primary action</Button>
+                <Button variant="secondary">Secondary</Button>
+                <Button variant="outline">Outline</Button>
+                <Button variant="ghost">Ghost</Button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge>Default</Badge>
+                <Badge variant="secondary">Secondary</Badge>
+                <Badge variant="destructive">Destructive</Badge>
+                <Badge variant="outline">Outline</Badge>
+              </div>
             </div>
           </div>
 

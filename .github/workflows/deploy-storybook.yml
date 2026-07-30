@@ -6,17 +6,18 @@ name: Deploy Storybook
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 # Until that is set, this workflow fails at the deploy step with "Pages is not enabled".
 #
-# Called by release.yml after every merge rather than triggered by the push itself: a releasing
-# merge produces two pushes (the merge, then the release commit), and triggering on both would
-# deploy the same Storybook twice. workflow_dispatch covers the rare direct push to the branch.
+# Triggered by release.yml completing on main (workflow_run), which gives this workflow its own
+# default-branch context — the one GitHub Pages requires. A pull_request-context caller would
+# be rejected with HTTP 403. workflow_dispatch covers the rare direct-push / recovery case.
+#
+# The deploy job's `if` guard mirrors the old `storybook` job condition in release.yml:
+# skip the deploy whenever the release workflow itself failed, so Pages never advertises a
+# version that was never actually published.
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: "Branch, tag or SHA to build. Defaults to the ref that triggered the run."
-        required: false
-        default: ""
-        type: string
+  workflow_run:
+    workflows: ["Release @suryagoku/ui"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -37,6 +38,10 @@ concurrency:
 jobs:
   deploy:
     name: Build and deploy to Pages
+    # For workflow_run: only deploy if the release workflow succeeded (or had no release to do —
+    # a skipped release job still yields conclusion=success for the overall workflow).
+    # For workflow_dispatch: always run (manual/recovery trigger).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

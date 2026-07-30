@@ -3,7 +3,7 @@
   --foreground: oklch(0.145 0 0);
   --card: oklch(0.5 0 0);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.5 0 0);
   --popover-foreground: oklch(0.145 0 0);
   /* Primary is a blue -> purple gradient. A gradient is a background-image, so it cannot back
      `text-primary`, `border-primary`, or any `/alpha` modifier — `--primary` stays a flat

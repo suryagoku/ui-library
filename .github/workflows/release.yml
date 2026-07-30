@@ -186,11 +186,24 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          PUBLISHED="$(npm view "@suryagoku/ui@${{ steps.bump.outputs.version }}" version)"
-          if [ "$PUBLISHED" != "${{ steps.bump.outputs.version }}" ]; then
-            echo "::error::Registry reports '$PUBLISHED', expected '${{ steps.bump.outputs.version }}'."
-            exit 1
-          fi
+          VERSION="${{ steps.bump.outputs.version }}"
+
+          echo "Waiting for @suryagoku/ui@$VERSION to appear on npm..."
+
+          for i in {1..12}; do
+            PUBLISHED=$(npm view "@suryagoku/ui@$VERSION" version 2>/dev/null || true)
+
+            if [ "$PUBLISHED" = "$VERSION" ]; then
+              echo "✅ Registry now serves version $VERSION"
+              exit 0
+            fi
+
+            echo "Attempt $i/12: version not available yet. Retrying in 10 seconds..."
+            sleep 10
+          done
+
+          echo "::error::Version $VERSION did not appear on npm after 2 minutes."
+          exit 1
 
       # Publishing comes first, so a rejected upload never leaves behind a tag for a version that
       # does not exist. 'current' has nothing to commit, only a tag to move.

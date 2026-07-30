@@ -1,0 +1,39 @@
+name: PR title
+
+# The pull request title is the release input: merging derives the version bump from it, and with
+# squash merging it becomes the commit subject on the default branch. So it is checked like code.
+#
+# Make this a required status check (Settings -> Branches -> protect main) or it is only advisory
+# and a non-conventional title can still merge.
+on:
+  pull_request:
+    # `edited` catches a title changed after the fact; `synchronize` keeps a result attached to the
+    # head commit, which is what a required status check looks at.
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    name: Conventional title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # No `pnpm install`: the script has no dependencies, so this check finishes in seconds and
+      # gives fast feedback on the one thing a contributor can fix without touching code.
+      - name: Check the pull request title
+        env:
+          # Passed through the environment, never interpolated into the run script. A PR title is
+          # attacker-controlled text, and `${{ ... }}` inside a shell line would execute it.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/pr-title.mjs --check "$PR_TITLE"

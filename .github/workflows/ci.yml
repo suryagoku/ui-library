@@ -62,12 +62,10 @@ jobs:
       - name: Verify the PR title parser
         run: pnpm run verify:title
 
+      # Kept as a build gate: a broken story fails here even when Chromatic cannot run, which is
+      # the case for a pull request from a fork (secrets, including the Chromatic project token,
+      # are not exposed to fork workflows). The downloadable artifact this step used to upload is
+      # gone — Chromatic publishes a browsable Storybook for every build, which is strictly better
+      # than a zip a reviewer has to download and serve.
       - name: Build Storybook
         run: pnpm run build:storybook
-
-      # Lets a reviewer download and open the built Storybook straight from the PR.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: storybook-static
-          path: apps/docs/storybook-static
-          retention-days: 7

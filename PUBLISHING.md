@@ -79,7 +79,7 @@ exists because a stale `dist/` is the easiest way to publish a broken package: i
 and imports fine, but silently exports the wrong things.
 
 [scripts/verify-package.mjs](scripts/verify-package.mjs) packs the tarball without publishing it
-and asserts 25 things — the ones that are invisible at install time:
+and asserts 26 things — the ones that are invisible at install time:
 
 - only `dist/` and `package.json` ship, and all three entry files exist
 - the `exports` map still exposes exactly `.` and `./styles.css`, and `prepack` is still wired up
@@ -94,7 +94,7 @@ and asserts 25 things — the ones that are invisible at install time:
 Then confirm everything else is green:
 
 ```bash
-pnpm check     # lint + format:check + typecheck + verify:pkg
+pnpm check     # lint + format:check + typecheck + verify:pkg + verify:title
 ```
 
 To eyeball the same things by hand:
@@ -297,8 +297,9 @@ A breaking change while the package is below `1.0.0` bumps the **minor**, not th
    rebuilding `dist/`, **re-queries the registry to confirm the new version is really served**,
    and only then commits `release: @suryagoku/ui <version> [skip ci]`, tags `ui-v<version>`,
    pushes, and creates a GitHub Release with generated notes.
-3. **storybook** — deploys Pages from the tip of `main`, so it includes the release commit. This
-   runs on **every** merge, releasing or not, and is skipped only if the release failed.
+   Once this workflow concludes successfully, `chromatic.yml` publishes the Storybook from the tip of
+   `main` — so it includes the release commit — and accepts it as the new visual baseline. That runs on
+   **every** merge, releasing or not, and is skipped if the release failed.
 
 The two registry checks are not belt-and-braces — they are load-bearing. As
 [documented below](#3-verify-the-published-result), `pnpm publish` prints "There are no new
@@ -349,7 +350,9 @@ Without these the workflows run but the automation does not hold. None of them a
    [Option 3](#option-3--private-registry-verdaccio-artifactory-nexus).
 7. **Add the `repository` field** to `packages/ui/package.json`. Required by GitHub Packages, and
    it gives the npm page a source link.
-8. **Enable Pages** if you want the docs site: Settings → Pages → Source: "GitHub Actions".
+8. **Add the `CHROMATIC_PROJECT_TOKEN` secret** if you want the hosted Storybook and visual
+   regression tests. Get it from the Chromatic project's Manage → Configure screen. GitHub Pages is
+   not used and can stay disabled.
 
 On tokens: `secrets.GITHUB_TOKEN` is injected automatically and never needs creating — GitHub
 reserves the `GITHUB_` prefix, so you cannot make a secret by that name. A separate PAT (here
@@ -634,8 +637,14 @@ it is what stops `pnpm publish` from exiting 0 having uploaded nothing.
 `pnpm-lock.yaml` is out of sync with a `package.json`. Run `pnpm install` and commit the updated
 lockfile.
 
-**Pages deploy fails with "Pages is not enabled"**
-Settings → Pages → Build and deployment → Source: "GitHub Actions".
+**Chromatic fails with "Missing project token"**
+The `CHROMATIC_PROJECT_TOKEN` secret is absent, or the run came from a fork — secrets are not
+exposed to fork pull requests, so Chromatic cannot run on them. CI still builds the Storybook, so a
+broken story is caught either way.
+
+**Chromatic reports every story as new, or loses its baseline**
+The checkout lacked full history. `chromatic.yml` sets `fetch-depth: 0` for exactly this reason;
+Chromatic walks git history to find the build to diff against.
 
 **Published fine, but consumers get no components**
 A stale `dist/`. Check with `npm view @your-scope/ui` and

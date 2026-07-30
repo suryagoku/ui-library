@@ -1,0 +1,112 @@
+name: Chromatic
+
+# Hosts and visually tests the Storybook. Replaces the GitHub Pages deploy this repository used
+# before: Chromatic publishes a browsable Storybook per build *and* diffs every story against a
+# baseline, which Pages could not do.
+#
+# Two paths, deliberately different:
+#
+#   push (any branch but main)  -> visual regression tests. Chromatic associates the build with
+#                                  the open pull request, so the check and the UI Review link
+#                                  appear on the PR. Unreviewed visual changes fail the check.
+#
+#   Release workflow succeeded  -> publish the latest Storybook from main and accept it as the new
+#                                  baseline. Same chaining the Pages deploy used, so release
+#                                  behaviour is unchanged.
+#
+# Why `push` and not `pull_request` for the first path: on a pull_request event GitHub builds an
+# ephemeral merge commit that does not persist in the repository, and Chromatic's own docs warn
+# that this can lose baselines. Triggering on push tests the real commit, and because Chromatic
+# links a commit to its pull request the review experience on the PR is the same.
+#
+# Setup, tokens and settings: see README.md and PUBLISHING.md.
+on:
+  push:
+    # main is handled by the release-chained job below, so it is excluded here to avoid publishing
+    # the same commit twice.
+    branches-ignore: [main]
+  workflow_run:
+    workflows: ["Release @suryagoku/ui"]
+    types: [completed]
+    # No `branches` filter: it matches the pull request's *head* branch, never main, so it would
+    # silently suppress every trigger. release.yml only runs for PRs targeting main anyway.
+  # Manual re-publish, e.g. after a direct push to main.
+  workflow_dispatch:
+
+concurrency:
+  # Per branch, so a new push supersedes an in-flight visual test of the same branch. The
+  # release-chained runs share the "main" group and queue rather than cancel.
+  group: chromatic-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-test:
+    name: Visual tests
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Chromatic walks git history to find the baseline to diff against. Without the full
+          # history it cannot, and every story is reported as new.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Built with the repository's own script, then handed to Chromatic as a prebuilt directory.
+      # This keeps one definition of how the Storybook is built, and keeps Chromatic out of the
+      # business of resolving pnpm workspaces.
+      - run: pnpm run build:storybook
+
+      - uses: chromaui/action@latest
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          storybookBuildDir: apps/docs/storybook-static
+          # Visual changes fail the check until a human accepts them in Chromatic. That review
+          # step is the point of running this on a pull request.
+          exitZeroOnChanges: false
+
+  publish:
+    name: Publish Storybook from main
+    # A merge that published no package version still concludes as success, so documentation-only
+    # merges publish too — matching what the Pages deploy did. A failed release does not publish.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run gives this workflow a default-branch context; check out the branch tip
+          # explicitly so the build includes the release commit release.yml just pushed.
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build:storybook
+
+      - uses: chromaui/action@latest
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          storybookBuildDir: apps/docs/storybook-static
+          # main is the source of truth, so its build becomes the new baseline without waiting for
+          # a review that has already happened on the pull request.
+          autoAcceptChanges: main

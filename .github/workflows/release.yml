@@ -245,4 +245,5 @@ jobs:
     # Deploys the tip of the branch, which by now includes the release commit.
     uses: ./.github/workflows/deploy-storybook.yml
     with:
-      ref: ${{ needs.plan.outputs.branch }}
+      ref: main
+      # ref: ${{ needs.plan.outputs.branch }}

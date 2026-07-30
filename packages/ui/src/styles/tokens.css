@@ -11,9 +11,9 @@
      `--primary-gradient` is redeclared in `.dark`: var() inside a custom property is
      substituted where the property is declared, so a `:root` definition would inherit into
      `.dark` already frozen to the light endpoints. */
-  --primary: oklch(0.55 0.23 285);
-  --primary-from: oklch(0.55 0.22 264);
-  --primary-to: oklch(0.55 0.24 305);
+  --primary: oklch(0.5 0.23 285);
+  --primary-from: oklch(0.5 0.22 264);
+  --primary-to: oklch(0.5 0.24 305);
   --primary-gradient: linear-gradient(to bottom right, var(--primary-from), var(--primary-to));
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);

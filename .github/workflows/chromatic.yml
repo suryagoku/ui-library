@@ -7,12 +7,18 @@ name: Chromatic
 # Two paths, deliberately different:
 #
 #   push (any branch but main)  -> visual regression tests. Chromatic associates the build with
-#                                  the open pull request, so the check and the UI Review link
-#                                  appear on the PR. Unreviewed visual changes fail the check.
+#                                  the open pull request, so its checks and a browsable Storybook
+#                                  appear on the PR.
 #
 #   Release workflow succeeded  -> publish the latest Storybook from main and accept it as the new
 #                                  baseline. Same chaining the Pages deploy used, so release
 #                                  behaviour is unchanged.
+#
+# Enforcement is not this workflow's exit code. Chromatic posts its own `UI Tests` and `UI Review`
+# commit statuses, and those are the required checks on main — they update the moment a change is
+# accepted or a reviewer approves in Chromatic, without re-running anything here. This workflow's
+# own status answers a narrower question: did the Storybook build and upload succeed. See
+# exitZeroOnChanges below for why that split is deliberate.
 #
 # Why `push` and not `pull_request` for the first path: on a pull_request event GitHub builds an
 # ephemeral merge commit that does not persist in the repository, and Chromatic's own docs warn
@@ -33,20 +39,24 @@ on:
   # Manual re-publish, e.g. after a direct push to main.
   workflow_dispatch:
 
-concurrency:
-  # Per branch, so a new push supersedes an in-flight visual test of the same branch. The
-  # release-chained runs share the "main" group and queue rather than cancel.
-  group: chromatic-${{ github.event.workflow_run.head_branch || github.ref_name }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
+# Concurrency is declared per job rather than workflow-wide, because the two jobs want opposite
+# policies and a single group cannot express both. It also cannot be written correctly at this
+# level: the expression would have to be `workflow_run.head_branch`, which as noted above is the
+# pull request's *head* branch and never main — so a release-chained run would be grouped with the
+# feature branch it came from and be eligible for cancellation by it.
 jobs:
   visual-test:
     name: Visual tests
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # A newer push supersedes an in-flight test of the same branch: only the latest commit's result
+    # is of any interest.
+    concurrency:
+      group: chromatic-visual-test-${{ github.ref_name }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,13 +78,32 @@ jobs:
       # business of resolving pnpm workspaces.
       - run: pnpm run build:storybook
 
-      - uses: chromaui/action@latest
+      - uses: chromaui/action@v18
+        id: chromatic
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           storybookBuildDir: apps/docs/storybook-static
-          # Visual changes fail the check until a human accepts them in Chromatic. That review
-          # step is the point of running this on a pull request.
-          exitZeroOnChanges: false
+          # True on purpose: a visual change must not fail this job. Accepting a change in
+          # Chromatic cannot turn an already-finished job green, so the only way to clear a red one
+          # is to re-run the workflow — rebuilding and re-uploading a byte-identical Storybook
+          # purely to recompute an exit code. The merge is gated by Chromatic's own `UI Tests` and
+          # `UI Review` statuses instead, which are required on main and go green on accept.
+          # Setting this to false would restore that rebuild loop without adding any strictness
+          # those required checks do not already enforce.
+          exitZeroOnChanges: true
+
+      # The run page should hand over the links rather than make someone dig through the log for
+      # them. `always()` so the links still appear when the step above failed.
+      - name: Link to the Chromatic build
+        if: always() && steps.chromatic.outputs.buildUrl
+        run: |
+          {
+            echo "### Chromatic"
+            echo
+            echo "- [Build](${{ steps.chromatic.outputs.buildUrl }}) — accept or reject visual changes here"
+            echo "- [Storybook](${{ steps.chromatic.outputs.storybookUrl }})"
+            echo "- Visual changes: ${{ steps.chromatic.outputs.changeCount }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   publish:
     name: Publish Storybook from main
@@ -84,6 +113,13 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
+    # Every run of this job builds the tip of the default branch and moves main's baseline, so runs
+    # must neither overlap nor be cancelled. A fixed group queues them — whichever runs last leaves
+    # the baseline matching main. Cancelling instead would let a superseded run abandon the baseline
+    # mid-update, and UI Review diffs the merge base against exactly that baseline.
+    concurrency:
+      group: chromatic-publish-main
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,10 +139,22 @@ jobs:
 
       - run: pnpm run build:storybook
 
-      - uses: chromaui/action@latest
+      - uses: chromaui/action@v18
+        id: chromatic
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           storybookBuildDir: apps/docs/storybook-static
           # main is the source of truth, so its build becomes the new baseline without waiting for
-          # a review that has already happened on the pull request.
+          # a review that has already happened on the pull request. This is also what supplies the
+          # merge-base build that UI Review needs to diff the next pull request against.
           autoAcceptChanges: main
+
+      - name: Link to the published Storybook
+        if: always() && steps.chromatic.outputs.storybookUrl
+        run: |
+          {
+            echo "### Chromatic"
+            echo
+            echo "- [Storybook](${{ steps.chromatic.outputs.storybookUrl }})"
+            echo "- [Build](${{ steps.chromatic.outputs.buildUrl }})"
+          } >> "$GITHUB_STEP_SUMMARY"

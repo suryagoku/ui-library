@@ -62,10 +62,11 @@ jobs:
       - name: Verify the PR title parser
         run: pnpm run verify:title
 
-      # Kept as a build gate: a broken story fails here even when Chromatic cannot run, which is
-      # the case for a pull request from a fork (secrets, including the Chromatic project token,
-      # are not exposed to fork workflows). The downloadable artifact this step used to upload is
-      # gone — Chromatic publishes a browsable Storybook for every build, which is strictly better
-      # than a zip a reviewer has to download and serve.
+      # Kept as a build gate even though chromatic.yml also builds the Storybook, because this one
+      # does not depend on Chromatic: a broken story still fails here if the project token is
+      # missing or Chromatic is unreachable, and it fails on the pull_request event rather than on
+      # push. The downloadable artifact this step used to upload is gone — Chromatic publishes a
+      # browsable Storybook for every build, which is strictly better than a zip a reviewer has to
+      # download and serve.
       - name: Build Storybook
         run: pnpm run build:storybook

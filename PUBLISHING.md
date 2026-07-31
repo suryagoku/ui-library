@@ -353,6 +353,16 @@ Without these the workflows run but the automation does not hold. None of them a
 8. **Add the `CHROMATIC_PROJECT_TOKEN` secret** if you want the hosted Storybook and visual
    regression tests. Get it from the Chromatic project's Manage → Configure screen. GitHub Pages is
    not used and can stay disabled.
+9. **Link the Chromatic project to this repository** on the same Manage → Configure screen, signed in
+   with GitHub. The token alone is enough to build and host, but only a linked project posts the
+   `UI Tests` and `UI Review` checks back onto pull requests — and those are the checks that gate a
+   merge, since `chromatic.yml` exits zero on visual changes by design. Linking also syncs the
+   published Storybook's visibility to the repository's, and syncs collaborators, so a designer with
+   repository access can review without a separate invitation.
+10. **Add `UI Tests` and `UI Review` as required checks** on `main` once Chromatic has posted them at
+    least once — a required check that has never reported blocks every pull request as "Expected".
+    Add the `GH_TOKEN` PAT's account to the bypass list at the same time, or the release job's final
+    push starts failing _after_ the package reaches npm.
 
 On tokens: `secrets.GITHUB_TOKEN` is injected automatically and never needs creating — GitHub
 reserves the `GITHUB_` prefix, so you cannot make a secret by that name. A separate PAT (here
@@ -638,13 +648,39 @@ it is what stops `pnpm publish` from exiting 0 having uploaded nothing.
 lockfile.
 
 **Chromatic fails with "Missing project token"**
-The `CHROMATIC_PROJECT_TOKEN` secret is absent, or the run came from a fork — secrets are not
-exposed to fork pull requests, so Chromatic cannot run on them. CI still builds the Storybook, so a
-broken story is caught either way.
+The `CHROMATIC_PROJECT_TOKEN` secret is absent. CI builds the Storybook independently of Chromatic,
+so a broken story is caught either way.
 
 **Chromatic reports every story as new, or loses its baseline**
 The checkout lacked full history. `chromatic.yml` sets `fetch-depth: 0` for exactly this reason;
 Chromatic walks git history to find the build to diff against.
+
+**No `UI Tests` or `UI Review` check appears on the pull request**
+The Chromatic project is not linked to this repository. Chromatic posts those statuses through its
+GitHub integration, and a project created from a bare project token has no such link — the build
+succeeds and the Storybook is published, but nothing is ever reported back. Fix it in Manage →
+Configure while signed in with GitHub. If those checks are already required on `main`, this also
+presents as every pull request stuck showing "Expected" with nothing to click.
+
+**`UI Review` stays pending even though the changes were accepted**
+`UI Tests` and `UI Review` are separate gates: accepting the changeset satisfies the first, while the
+second additionally needs every assigned reviewer to approve and every discussion resolved. The
+designer is a default reviewer, so their approval is required on any review that has visual changes.
+If nobody is available, un-assign them on that review or merge with admin rights.
+
+**`UI Review` cannot compute a diff, or diffs against the wrong commit**
+UI Review compares the pull request against the **merge base**, so `main` needs a Chromatic build of
+its own. Those come from the release-chained `publish` job, which runs after _every_ merge. A commit
+that reached `main` without one — a force-push, or a direct push by someone exempt from branch
+protection — leaves that gap; **Actions → Chromatic → Run workflow** rebuilds `main` and restores it.
+
+**The release workflow fails at its final `git push` after publishing to npm**
+`UI Tests` and `UI Review` were added as required checks without leaving the release identity exempt
+from them. Required status checks apply to direct pushes, and the release commit carries no Chromatic
+status of its own, so the push is rejected — leaving the version on the registry with no commit and
+no tag. Add the `GH_TOKEN` PAT's account to the ruleset's bypass list (or, with classic protection,
+leave "Include administrators" off). To recover: re-run with `release_type: current` once the bypass
+is in place, or commit and tag by hand.
 
 **Published fine, but consumers get no components**
 A stale `dist/`. Check with `npm view @your-scope/ui` and

@@ -49,7 +49,7 @@ export const Playground: Story = {}
 export const AllVariants: Story = {
   parameters: { layout: "padded" },
   render: () => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-4">
       {VARIANTS.map((variant) => (
         <Button key={variant} variant={variant}>
           {variant}

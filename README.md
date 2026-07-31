@@ -56,7 +56,7 @@ ui-library/
 │  ├─ .storybook/            Storybook config
 │  └─ vite.config.ts         dev server + workspace aliases + Tailwind plugin
 │
-├─ .github/workflows/        CI, the PR title check, the release, the Storybook deploy
+├─ .github/workflows/        CI, the PR title check, the release, Chromatic
 ├─ scripts/verify-package.mjs  asserts the publishable tarball is well-formed
 ├─ scripts/pr-title.mjs      parses PR titles and derives the version bump from them
 ├─ tsconfig.base.json        TypeScript options shared by every package
@@ -451,12 +451,12 @@ because a parser that quietly picks the wrong version number is the worst kind o
 
 Four workflows in [.github/workflows](.github/workflows):
 
-| Workflow               | Trigger                                 | What it does                                                                                                        |
-| ---------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `pr-title.yml`         | PR opened, edited, pushed to            | rejects a title that isn't conventional, with a message saying how to fix it                                        |
-| `ci.yml`               | every PR, pushes to the default branch  | lint, format check, typecheck, build both packages, `verify:pkg`, `verify:title`, build Storybook as an artifact    |
-| `release.yml`          | **a PR merged into `main`** (or manual) | derive the bump; if releasing: gates → publish → confirm the registry → commit, tag `ui-v<version>`, GitHub Release |
-| `deploy-storybook.yml` | called by `release.yml` after any merge | deploy Storybook to GitHub Pages                                                                                    |
+| Workflow        | Trigger                                        | What it does                                                                                                        |
+| --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `pr-title.yml`  | PR opened, edited, pushed to                   | rejects a title that isn't conventional, with a message saying how to fix it                                        |
+| `ci.yml`        | every PR, pushes to the default branch         | lint, format check, typecheck, build both packages, `verify:pkg`, `verify:title`, build Storybook                   |
+| `release.yml`   | **a PR merged into `main`** (or manual)        | derive the bump; if releasing: gates → publish → confirm the registry → commit, tag `ui-v<version>`, GitHub Release |
+| `chromatic.yml` | pushes to any branch but `main`; after release | build and upload the Storybook so Chromatic can diff it, and publish it from `main` once a release succeeds         |
 
 CI runs exactly what `pnpm check` runs locally, so a green local run means a green pipeline.
 
@@ -481,8 +481,54 @@ The automation is inert without these — see
 3. branch protection must let the release job push the version commit (a `GH_TOKEN` PAT, which
    this repo already uses, or a bypass entry for `github-actions[bot]`)
 4. an `NPM_TOKEN` repository secret (an npm **automation** token)
-5. Pages enabled (Settings → Pages → Source: GitHub Actions)
-6. settle `license` — it still says `UNLICENSED`, which contradicts a public npm release
+5. a `CHROMATIC_PROJECT_TOKEN` repository secret, from the Chromatic project's Manage → Configure
+   screen — without it the Storybook is neither hosted nor visually tested
+6. **the Chromatic project linked to this repository** (Manage → Configure, signed in with GitHub).
+   A project created from a bare token is not linked, and an unlinked project never posts a status
+   check — which is what the two items below depend on
+7. **`UI Tests` and `UI Review` as required status checks** on `main`. These are posted by Chromatic,
+   not by Actions, and they are what actually blocks a merge: `chromatic.yml` deliberately exits
+   zero on a visual change. Add them only once Chromatic has posted them at least once, or they sit
+   permanently "Expected" and nothing can merge
+8. **UI Review enabled** in Chromatic (Manage), with the designer set as a **default reviewer** so
+   every review with visual changes needs their approval
+9. settle `license` — it still says `UNLICENSED`, which contradicts a public npm release
+
+### Storybook hosting and visual review
+
+The Storybook is hosted by **Chromatic**, which also diffs every story against a baseline. GitHub
+Pages is no longer used.
+
+- **on a branch push** — `chromatic.yml` builds the Storybook and compares it to the baseline.
+  Chromatic links the build to the open pull request, so its checks and a browsable Storybook appear
+  there.
+- **after a successful release** — the same workflow publishes the Storybook from `main` and accepts
+  it as the new baseline. This is also what gives the _next_ pull request a merge base to diff
+  against, which UI Review requires.
+
+**Where the gate lives.** Not in the Actions job. `chromatic.yml` exits zero even when there are
+visual changes, so its own status only means "the Storybook built and uploaded". The merge is blocked
+by two checks Chromatic posts itself:
+
+| Check       | Goes green when                                            |
+| ----------- | ---------------------------------------------------------- |
+| `UI Tests`  | every visual change has been accepted in Chromatic         |
+| `UI Review` | the designer has approved and any discussions are resolved |
+
+Both update the instant you act in Chromatic — **no re-run of anything in Actions**. This is the
+whole reason the job no longer fails on changes: a finished Actions job cannot be turned green from
+Chromatic, so failing it would mean rebuilding and re-uploading an identical Storybook just to
+recompute an exit code.
+
+A pull request with no visual changes never goes pending, so documentation and chore work is not
+blocked waiting on a review.
+
+It triggers on `push` rather than `pull_request` on purpose: a `pull_request` event builds an
+ephemeral merge commit that does not persist, which Chromatic's documentation warns can lose
+baselines. Pushing tests the real commit, and the pull request still gets the checks.
+
+Run it locally against your own branch with `npx chromatic --project-token <token>` after
+`pnpm run build:storybook`.
 
 ---
 
